@@ -1,0 +1,87 @@
+AlertMe - User Documentation
+===========================
+
+1. USER ROLES
+------------
+a) Administrator
+   - Manage government deadlines
+   - View all users
+   - Monitor system activity
+   - Access admin dashboard
+
+b) Regular User
+   - Manage personal deadlines
+   - Subscribe to government deadlines
+   - Receive notifications
+   - View calendar
+
+2. FEATURES GUIDE
+---------------
+a) Dashboard
+   - Overview of upcoming deadlines
+   - Priority indicators (High, Medium, Low)
+   - Quick actions menu
+   - Calendar view
+
+b) Personal Deadlines
+   - Add new deadline
+   - Edit existing deadlines
+   - Set priority levels
+   - Add descriptions
+   - Set due dates
+
+c) Government Deadlines
+   - View available deadlines
+   - Subscribe/Unsubscribe
+   - Filter by department
+   - Sort by due date
+
+d) Notifications
+   - SMS alerts
+   - Email notifications
+   - 30-day reminder
+   - 15-day reminder
+   - 1-day reminder
+   - Due date alert
+
+3. COMMON TASKS
+-------------
+a) Adding a Personal Deadline
+   1. Click "Add New Deadline"
+   2. Fill in required details
+   3. Set priority
+   4. Click Save
+
+b) Subscribing to Government Deadlines
+   1. Browse government deadlines
+   2. Click Subscribe button
+   3. Confirm subscription
+
+c) Managing Notifications
+   1. Access settings
+   2. Choose notification methods
+   3. Set reminder preferences
+
+4. SECURITY
+----------
+- Regular password changes recommended
+- Secure your .env file
+- Don't share login credentials
+- Log out after each session
+
+5. BEST PRACTICES
+---------------
+- Keep deadlines updated
+- Check dashboard regularly
+- Set appropriate priorities
+- Enable notifications
+- Maintain accurate contact information
+
+6. SUPPORT
+---------
+For technical issues:
+- Check SETUP.txt
+- Verify configuration
+- Contact system administrator
+
+Note: This software is for non-commercial use only.

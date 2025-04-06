@@ -1,0 +1,74 @@
+AlertMe - Setup Instructions
+===========================
+
+1. SYSTEM REQUIREMENTS
+--------------------
+- Windows 10 or higher
+- Python 3.8+
+- MongoDB Community Server
+- Internet connection for SMS/Email services
+
+2. INSTALLATION STEPS
+-------------------
+a) Python Setup:
+   - Download Python from python.org
+   - During installation, check "Add Python to PATH"
+   - Verify installation: python --version
+
+b) MongoDB Setup:
+   - Install MongoDB Community Server
+   - Create database: alertme
+   - Create database: personal_deadlines_db
+   - Start MongoDB service
+
+c) Project Setup:
+   - Extract AlertMe to your preferred location
+   - Open command prompt
+   - Navigate: cd path/to/AlertMe
+   - Install dependencies: pip install -r requirements.txt
+
+3. CONFIGURATION
+--------------
+Create .env file in C:\Apps\Alertme with:
+
+MONGODB_URI=mongodb://localhost:27017
+DB_NAME=alertme
+PERSONAL_DB_NAME=personal_deadlines_db
+SMTP_EMAIL=your_email
+SMTP_PASSWORD=your_password
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+TWILIO_ACCOUNT_SID=your_sid
+TWILIO_AUTH_TOKEN=your_token
+TWILIO_PHONE_NUMBER=your_number
+API_BASE_URL=http://localhost:5000
+
+4. RUNNING THE APPLICATION
+------------------------
+a) Start Backend:
+   - Open command prompt
+   - cd path/to/AlertMe
+   - python src/backend/app.py
+
+b) Start Frontend:
+   - Open new command prompt
+   - cd path/to/AlertMe
+   - python main.py
+
+5. FIRST LOGIN
+------------
+Admin:
+- Email: admin@alertme.com
+- Password: [from .env file]
+
+Regular User:
+- Create account through signup page
+
+6. TROUBLESHOOTING
+----------------
+- Check MongoDB service is running
+- Verify all environment variables
+- Check backend server is running
+- Ensure ports 5000 and 27017 are available
+
+For technical support, refer to documentation.

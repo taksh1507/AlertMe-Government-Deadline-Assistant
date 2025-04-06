@@ -1,0 +1,80 @@
+AlertMe Notification Service Setup
+================================
+
+1. LOCAL SETUP
+-------------
+a) Windows Service:
+   - Install NSSM (Non-Sucking Service Manager)
+   - Open Admin Command Prompt
+   - Create service:
+     nssm install AlertMeScanner "python" "c:\path\to\deadline_scanner.py"
+   - Start service:
+     nssm start AlertMeScanner
+
+b) Task Scheduler:
+   - Open Task Scheduler
+   - Create Basic Task
+   - Trigger: At startup
+   - Action: Start Program
+   - Program: python
+   - Arguments: "c:\path\to\deadline_scanner.py"
+
+2. CLOUD DEPLOYMENT
+-----------------
+a) Heroku:
+   - Create Procfile:
+     worker: python src/backend/services/deadline_scanner.py
+   - Deploy using Heroku CLI:
+     heroku create alertme-scanner
+     git push heroku main
+   - Enable worker:
+     heroku ps:scale worker=1
+
+b) AWS EC2:
+   - Launch EC2 instance
+   - Install dependencies
+   - Create systemd service:
+     [Unit]
+     Description=AlertMe Scanner Service
+     
+     [Service]
+     ExecStart=/usr/bin/python3 /path/to/deadline_scanner.py
+     Restart=always
+     
+     [Install]
+     WantedBy=multi-user.target
+
+c) Azure Web Jobs:
+   - Create continuous WebJob
+   - Upload scanner script
+   - Configure always-on setting
+
+3. DOCKER SETUP
+-------------
+a) Create Dockerfile:
+   FROM python:3.8
+   WORKDIR /app
+   COPY requirements.txt .
+   RUN pip install -r requirements.txt
+   COPY . .
+   CMD ["python", "src/backend/services/deadline_scanner.py"]
+
+b) Build & Run:
+   docker build -t alertme-scanner .
+   docker run -d alertme-scanner
+
+4. MONITORING
+-----------
+- Check deadline_scanner.log
+- Set up email alerts for errors
+- Monitor service status
+- Configure restart policies
+
+5. SECURITY NOTES
+---------------
+- Secure environment variables
+- Use SSL/TLS for MongoDB connection
+- Implement rate limiting
+- Regular security audits
+
+Note: Choose deployment method based on your scale and requirements.

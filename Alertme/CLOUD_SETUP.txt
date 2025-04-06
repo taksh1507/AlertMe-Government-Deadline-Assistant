@@ -1,0 +1,67 @@
+AlertMe Cloud Server Setup
+=========================
+
+1. CLOUD PROVIDER OPTIONS
+-----------------------
+a) AWS Free Tier:
+   - Create AWS account
+   - Launch EC2 t2.micro instance (free tier eligible)
+   - Install required dependencies
+   - Configure auto-scaling
+   - Set up CloudWatch monitoring
+
+b) Google Cloud Platform:
+   - Use GCP free credits
+   - Deploy to App Engine
+   - Configure automatic scaling
+   - Set up Stackdriver monitoring
+   - Enable error reporting
+
+c) Azure Free Tier:
+   - Create Azure account
+   - Deploy to Azure App Service
+   - Configure continuous deployment
+   - Set up Application Insights
+   - Enable automatic restarts
+
+2. DEPLOYMENT STEPS
+-----------------
+a) Server Setup:
+   - Choose nearest region
+   - Install Python runtime
+   - Configure MongoDB Atlas (free tier)
+   - Set up environment variables
+   - Install application dependencies
+
+b) Application Configuration:
+   - Update .env file with cloud credentials
+   - Configure cloud database connection
+   - Set up cloud storage
+   - Enable logging services
+   - Configure backup systems
+
+3. MONITORING
+-----------
+a) Health Checks:
+   - Set up ping monitoring
+   - Configure resource alerts
+   - Enable error notifications
+   - Monitor application logs
+   - Track system metrics
+
+b) Backup Systems:
+   - Configure daily backups
+   - Set up failover systems
+   - Enable data replication
+   - Configure disaster recovery
+   - Set up redundant services
+
+4. COST OPTIMIZATION
+------------------
+- Use free tier resources
+- Configure auto-scaling
+- Optimize database queries
+- Monitor resource usage
+- Set up billing alerts
+
+Note: Choose the cloud provider based on your region and requirements.
