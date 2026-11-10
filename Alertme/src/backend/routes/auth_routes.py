@@ -3,7 +3,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from ..models.user import User
 import jwt
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')  # Add url_prefix
 
@@ -56,9 +56,9 @@ def admin_login():
             {
                 'user_id': 'admin',
                 'is_admin': True,
-                'exp': datetime.utcnow() + timedelta(days=1)
+                'exp': datetime.now(timezone.utc) + timedelta(days=1)
             },
-            os.getenv('JWT_SECRET_KEY')
+            os.getenv('JWT_SECRET_KEY'),
             algorithm='HS256'
         )
         
