@@ -2,13 +2,14 @@ from pymongo import MongoClient
 from bson import ObjectId
 from datetime import datetime
 import re
+import os
 
 class DeadlineModel:
-    def __init__(self):
+    def __init__(self, client=None):
         try:
-            self.client = MongoClient('mongodb://your_mongodb_uri')
-            self.db = self.client['your_database_name']
-            self.personal_db = self.client['your_personal_db']
+            self.client = client if client is not None else MongoClient(os.environ['MONGODB_URI'])
+            self.db = self.client[os.environ['DB_NAME']]
+            self.personal_db = self.client[os.environ['PERSONAL_DB_NAME']]
             self.collection = self.personal_db['deadlines']
             
             # Create indexes
@@ -56,21 +57,25 @@ class DeadlineModel:
         except Exception as e:
             raise Exception(f"Failed to fetch deadlines: {str(e)}")
 
-    def get_deadline_by_id(self, deadline_id):
-        deadline = self.collection.find_one({'_id': ObjectId(deadline_id)})
+    def get_deadline_by_id(self, deadline_id, user_id):
+        deadline = self.collection.find_one({'_id': ObjectId(deadline_id), 'user_id': user_id})
         if deadline:
             deadline['_id'] = str(deadline['_id'])
         return deadline
 
-    def update_deadline(self, deadline_id, update_data):
-        update_data['updated_at'] = datetime.utcnow()
-        self.collection.update_one(
-            {'_id': ObjectId(deadline_id)},
-            {'$set': update_data}
+    def update_deadline(self, deadline_id, update_data, user_id):
+        allowed = {'title', 'description', 'due_date', 'priority', 'status'}
+        updates = {key: value for key, value in update_data.items() if key in allowed}
+        updates['updated_at'] = datetime.utcnow()
+        result = self.collection.update_one(
+            {'_id': ObjectId(deadline_id), 'user_id': user_id},
+            {'$set': updates}
         )
+        return result.matched_count > 0
 
-    def delete_deadline(self, deadline_id):
-        self.collection.delete_one({'_id': ObjectId(deadline_id)})
+    def delete_deadline(self, deadline_id, user_id):
+        result = self.collection.delete_one({'_id': ObjectId(deadline_id), 'user_id': user_id})
+        return result.deleted_count > 0
 
     def get_deadlines_by_date(self, date, user_id):
         deadlines = self.collection.find({
