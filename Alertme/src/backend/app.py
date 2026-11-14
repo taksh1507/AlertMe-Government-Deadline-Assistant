@@ -10,6 +10,7 @@ from flask_jwt_extended import (
 from .models.deadline import DeadlineModel
 from datetime import datetime, timedelta
 from functools import wraps
+from hmac import compare_digest
 from bson.objectid import ObjectId
 from .models.personal_deadline import PersonalDeadlineModel
 
@@ -25,8 +26,11 @@ CORS(app, resources={
 })
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False
+jwt_secret = os.environ.get('JWT_SECRET_KEY', '')
+if len(jwt_secret) < 32 or jwt_secret.startswith('your-'):
+    raise RuntimeError('Set JWT_SECRET_KEY to a unique random value of at least 32 characters')
+app.config['JWT_SECRET_KEY'] = jwt_secret
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 jwt = JWTManager(app)
 
 # MongoDB connection with environment variables
@@ -39,8 +43,9 @@ db = client[os.getenv('DB_NAME', 'your_database_name')]
 personal_db = client[os.getenv('PERSONAL_DB_NAME', 'your_personal_db')]
 
 # Admin configuration using environment variables
-ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'your_admin_email')
-ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'your_admin_password')
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', '')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', '')
 users = db['users']
 
 # Create indexes
@@ -48,10 +53,6 @@ db.government_deadlines.create_index([('subscribers', 1)])
 db.government_deadlines.create_index([('due_date', 1)])
 users.create_index([('email', 1)])
 db.admin_settings.create_index([('email', 1)], unique=True)
-
-# Admin configuration
-ADMIN_EMAIL = "admin@alertme.com"
-ADMIN_PASSWORD = "admin123"
 
 # Admin middleware
 def admin_required(f):
@@ -65,10 +66,10 @@ def admin_required(f):
     return wrapper
 
 # Initialize deadline model
-deadline_model = DeadlineModel()
+deadline_model = DeadlineModel(client=client)
 
 # Initialize models
-personal_deadline_model = PersonalDeadlineModel()
+personal_deadline_model = PersonalDeadlineModel(client=client)
 
 # Personal deadlines routes
 @app.route('/api/personal-deadlines', methods=['GET'])
@@ -87,11 +88,7 @@ def create_personal_deadline():
     try:
         current_user_id = get_jwt_identity()
         data = request.get_json()
-        
-        # Debug print
-        print("Received data:", data)
-        print("Current user ID:", current_user_id)
-        
+
         # Validate required fields
         required_fields = ['title', 'due_date', 'priority']
         missing_fields = [field for field in required_fields if not data.get(field)]
@@ -99,7 +96,7 @@ def create_personal_deadline():
             return jsonify({
                 'message': f'Missing required fields: {", ".join(missing_fields)}'
             }), 422
-        
+
         # Format data before sending to model
         deadline_data = {
             'title': data.get('title').strip(),
@@ -110,15 +107,15 @@ def create_personal_deadline():
             'type': 'personal',
             'user_id': current_user_id
         }
-        
+
         # Create deadline
         deadline_id = personal_deadline_model.create_deadline(deadline_data)
-        
+
         return jsonify({
             'message': 'Personal deadline created successfully',
             'id': deadline_id
         }), 201
-        
+
     except ValueError as ve:
         print("Validation error:", str(ve))
         return jsonify({'message': str(ve)}), 422
@@ -129,28 +126,40 @@ def create_personal_deadline():
 @app.route('/api/personal-deadlines/<deadline_id>', methods=['PUT', 'DELETE'])
 @jwt_required()
 def handle_personal_deadline(deadline_id):
+    if not ObjectId.is_valid(deadline_id):
+        return jsonify({'message': 'Invalid deadline ID'}), 400
+    user_id = get_jwt_identity()
     try:
         if request.method == 'PUT':
-            data = request.get_json()
-            success = personal_deadline_model.update_deadline(deadline_id, data)
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify({'message': 'A JSON object is required'}), 400
+            success = personal_deadline_model.update_deadline(deadline_id, data, user_id)
             if success:
                 return jsonify({'message': 'Deadline updated successfully'})
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
         elif request.method == 'DELETE':
-            success = personal_deadline_model.delete_deadline(deadline_id)
+            success = personal_deadline_model.delete_deadline(deadline_id, user_id)
             if success:
                 return jsonify({'message': 'Deadline deleted successfully'})
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
 # Authentication routes
 @app.route('/auth/api/admin/login', methods=['POST'])
 def admin_login():
-    data = request.get_json()
-    if data.get('email') == ADMIN_EMAIL and data.get('password') == ADMIN_PASSWORD:
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'message': 'Invalid admin credentials'}), 401
+    password = data.get('password')
+    password_valid = isinstance(password, str) and (
+        check_password_hash(ADMIN_PASSWORD_HASH, password) if ADMIN_PASSWORD_HASH
+        else bool(ADMIN_PASSWORD) and isinstance(password, str) and compare_digest(password, ADMIN_PASSWORD)
+    )
+    if ADMIN_EMAIL and data.get('email') == ADMIN_EMAIL and password_valid:
         access_token = create_access_token(
             identity='admin',
             additional_claims={'is_admin': True}
@@ -168,37 +177,48 @@ def verify_admin():
 
 @app.route('/signup', methods=['POST'])
 def signup():
-    data = request.get_json()
-    
+    data = request.get_json(silent=True)
+    required = ('email', 'phone', 'name', 'password')
+    if not isinstance(data, dict) or not all(
+        isinstance(data.get(key), str) and data[key].strip() for key in required
+    ):
+        return jsonify({'message': 'Name, email, phone and password are required'}), 400
+    data = {key: data[key] for key in required}
+
     if users.find_one({'email': data['email']}):
         return jsonify({'message': 'Email already registered'}), 400
     if users.find_one({'phone': data['phone']}):
         return jsonify({'message': 'Phone number already registered'}), 400
-    
+
     data['password'] = generate_password_hash(data['password'])
-    
+
     # Insert into main database
     user_id = users.insert_one(data).inserted_id
-    
+
     # Insert into personal deadlines database
     personal_db.users.insert_one({
         'original_id': str(user_id),
         'email': data['email'],
         'name': data['name']
     })
-    
+
     return jsonify({'message': 'User created successfully'}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not all(
+        isinstance(data.get(key), str) and data[key].strip()
+        for key in ('identifier', 'password')
+    ):
+        return jsonify({'message': 'Identifier and password are required'}), 400
     user = users.find_one({
         '$or': [
             {'email': data.get('identifier')},
             {'phone': data.get('identifier')}
         ]
     })
-    
+
     if user and check_password_hash(user['password'], data['password']):
         access_token = create_access_token(identity=str(user['_id']))
         return jsonify({
@@ -226,7 +246,7 @@ def create_deadline():
     try:
         current_user = get_jwt_identity()
         data = request.get_json()
-        
+
         deadline_data = {
             'user_id': current_user,
             'title': data.get('title'),
@@ -236,13 +256,13 @@ def create_deadline():
             'status': data.get('status', 'pending'),
             'type': 'personal'
         }
-        
+
         deadline_id = deadline_model.create_deadline(deadline_data)
         return jsonify({
             'message': 'Deadline created successfully',
             'id': deadline_id
         }), 201
-        
+
     except ValueError as e:
         return jsonify({'message': str(e)}), 422
     except Exception as e:
@@ -251,15 +271,21 @@ def create_deadline():
 @app.route('/api/deadlines/<deadline_id>', methods=['GET', 'PUT', 'DELETE'])
 @jwt_required()
 def handle_deadline(deadline_id):
+    if not ObjectId.is_valid(deadline_id):
+        return jsonify({'message': 'Invalid deadline ID'}), 400
+    user_id = get_jwt_identity()
     if request.method == 'GET':
-        deadline = deadline_model.get_deadline_by_id(deadline_id)
+        deadline = deadline_model.get_deadline_by_id(deadline_id, user_id)
         return jsonify(deadline) if deadline else ('', 404)
     elif request.method == 'PUT':
-        deadline_model.update_deadline(deadline_id, request.json)
-        return '', 204
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'message': 'A JSON object is required'}), 400
+        success = deadline_model.update_deadline(deadline_id, data, user_id)
+        return ('', 204) if success else ('', 404)
     elif request.method == 'DELETE':
-        deadline_model.delete_deadline(deadline_id)
-        return '', 204
+        success = deadline_model.delete_deadline(deadline_id, user_id)
+        return ('', 204) if success else ('', 404)
 
 @app.route('/api/deadlines/date/<date>', methods=['GET'])
 @jwt_required()
@@ -285,7 +311,7 @@ def admin_government_deadlines():
                 'subscribers': d.get('subscribers', [])
             } for d in deadlines]
             return jsonify({'deadlines': formatted_deadlines})
-            
+
         elif request.method == 'POST':
             data = request.get_json()
             data['created_at'] = datetime.utcnow().isoformat()
@@ -295,7 +321,7 @@ def admin_government_deadlines():
                 'id': str(result.inserted_id),
                 'message': 'Government deadline created successfully'
             }), 201
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -308,7 +334,7 @@ def admin_handle_govt_deadline(deadline_id):
             if result.deleted_count:
                 return jsonify({'message': 'Deadline deleted successfully'}), 200
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
         elif request.method == 'PUT':
             data = request.get_json()
             result = db.government_deadlines.update_one(
@@ -325,7 +351,7 @@ def admin_handle_govt_deadline(deadline_id):
             if result.modified_count:
                 return jsonify({'message': 'Deadline updated successfully'}), 200
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -353,7 +379,7 @@ def subscribe_to_govt_deadline(deadline_id):
         data = request.get_json()
         user_email = data.get('email')
         subscribed = data.get('subscribed', True)
-        
+
         if not user_email:
             return jsonify({'message': 'Email is required'}), 400
 
@@ -433,7 +459,7 @@ def handle_admin_settings():
                 'notifications_enabled': settings.get('notifications_enabled', True),
                 'email_notifications': settings.get('email_notifications', True)
             })
-            
+
         elif request.method == 'PUT':
             data = request.get_json()
             db.admin_settings.update_one(
@@ -447,7 +473,7 @@ def handle_admin_settings():
                 upsert=True
             )
             return jsonify({'message': 'Settings updated successfully'})
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -458,21 +484,21 @@ def get_admin_analytics():
         total_users = users.count_documents({})
         total_deadlines = db.government_deadlines.count_documents({})
         active_users = len(db.government_deadlines.distinct('subscribers'))
-        
+
         deadline_stats = [{
             'title': d.get('title', ''),
             'total_subscribers': len(d.get('subscribers', [])),
             'active_users': len(d.get('subscribers', [])),
             'completion_rate': 0
         } for d in db.government_deadlines.find()]
-        
+
         user_stats = [{
             'name': u.get('name', ''),
             'subscribed_deadlines': db.government_deadlines.count_documents({'subscribers': u.get('email')}),
             'active_deadlines': db.government_deadlines.count_documents({'subscribers': u.get('email')}),
             'completion_rate': 0
         } for u in users.find({}, {'password': 0})]
-        
+
         return jsonify({
             'summary': {
                 'total_users': total_users,
@@ -482,7 +508,7 @@ def get_admin_analytics():
             'deadlines': deadline_stats,
             'users': user_stats
         })
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -492,16 +518,16 @@ def get_user_statistics():
     try:
         user_id = get_jwt_identity()
         user_deadlines = list(db.deadlines.find({'user_id': user_id}))
-        
+
         return jsonify({
             'total_tasks': len(user_deadlines),
             'in_progress': sum(1 for d in user_deadlines if d.get('status') == 'In Progress'),
             'completed': sum(1 for d in user_deadlines if d.get('status') == 'Completed'),
             'urgent': sum(1 for d in user_deadlines if d.get('priority') == 'High')
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=False)

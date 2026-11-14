@@ -2,15 +2,16 @@ from pymongo import MongoClient
 from bson import ObjectId
 from datetime import datetime
 import re
+import os
 
 class PersonalDeadlineModel:
-    def __init__(self):
+    def __init__(self, client=None):
         try:
-            self.client = MongoClient('mongodb://your_mongodb_uri')
-            self.db = self.client['your_database_name']
+            self.client = client if client is not None else MongoClient(os.environ['MONGODB_URI'])
+            self.db = self.client[os.environ['DB_NAME']]
             self.collection = self.db['deadlines']
             self.users = self.db['users']
-            
+
             # Create indexes
             self.collection.create_index([('user_id', 1)])
             self.collection.create_index([('due_date', 1)])
@@ -74,20 +75,22 @@ class PersonalDeadlineModel:
         except Exception as e:
             raise Exception(f"Failed to get deadlines: {str(e)}")
 
-    def update_deadline(self, deadline_id, deadline_data):
+    def update_deadline(self, deadline_id, deadline_data, user_id):
         try:
+            allowed = {'title', 'description', 'due_date', 'priority', 'status'}
+            deadline_data = {key: value for key, value in deadline_data.items() if key in allowed}
             deadline_data['updated_at'] = datetime.utcnow()
             result = self.collection.update_one(
-                {'_id': ObjectId(deadline_id)},
+                {'_id': ObjectId(deadline_id), 'user_id': user_id},
                 {'$set': deadline_data}
             )
-            return result.modified_count > 0
+            return result.matched_count > 0
         except Exception as e:
             raise Exception(f"Failed to update deadline: {str(e)}")
 
-    def delete_deadline(self, deadline_id):
+    def delete_deadline(self, deadline_id, user_id):
         try:
-            result = self.collection.delete_one({'_id': ObjectId(deadline_id)})
+            result = self.collection.delete_one({'_id': ObjectId(deadline_id), 'user_id': user_id})
             return result.deleted_count > 0
         except Exception as e:
             raise Exception(f"Failed to delete deadline: {str(e)}")

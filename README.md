@@ -65,7 +65,7 @@ AlertMe/
 │   │       │   ├── fancy_widgets.py
 │   │   │   └── government_deadline_dialog.py
 │   │       └── windows/            # login window and other top-level windows
-│   └── .env                        # tracked secrets file — see Security notes
+│   └── .env.example                # Safe configuration template
 ├── CLOUD_SETUP.txt
 ├── DOCUMENTATION.txt
 ├── NOTIFICATION_SETUP.txt
@@ -127,3 +127,31 @@ Notes:
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+## API security configuration and tests
+
+Copy `Alertme/.env.example` to `Alertme/.env`. Configure the MongoDB URI and both
+database names. Set a unique random `JWT_SECRET_KEY` of at least 32 characters;
+the API refuses to start with a missing or short signing key. Existing tokens
+must be replaced after key rotation. Newly issued tokens expire after one hour;
+users must sign in again when they expire.
+
+Admin login is disabled until `ADMIN_EMAIL` and either `ADMIN_PASSWORD_HASH`
+(preferred, generated using Werkzeug's `generate_password_hash`) or the legacy
+`ADMIN_PASSWORD` are configured. No admin account is provisioned automatically.
+Keep all credential values outside Git. The previously tracked `.env` is now
+untracked; review historical exposure and rotate any values ever used in service.
+
+Run the standalone backend from `Alertme/` with
+`python -m src.backend.app` after configuring your local environment. The local
+development server binds to loopback without the interactive debugger.
+
+The regression suite needs no MongoDB server, GUI, cloud account or real secrets:
+
+```bash
+python -m pip install -r requirements-test.txt
+python -m pytest tests -q
+```
+
+Tests use an in-memory MongoDB mock. They do not establish production database,
+GUI, SMS or email functionality. See `docs/audits/` for the review scope and risks.
