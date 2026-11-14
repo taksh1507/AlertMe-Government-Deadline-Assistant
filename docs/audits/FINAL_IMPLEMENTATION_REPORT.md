@@ -40,4 +40,4 @@ No UI redesign, dependency upgrades to the application manifest, database migrat
 
 See `SECURITY_AUDIT.md` for residual risks, rotation guidance and further assessment. This first pass does not complete the full portfolio modernization request and does not establish production readiness.
 
-Pull request: pending creation; see the branch's GitHub pull request for review.
+Pull request: https://github.com/taksh1507/AlertMe-Government-Deadline-Assistant/pull/1

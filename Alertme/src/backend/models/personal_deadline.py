@@ -11,7 +11,7 @@ class PersonalDeadlineModel:
             self.db = self.client[os.environ['DB_NAME']]
             self.collection = self.db['deadlines']
             self.users = self.db['users']
-            
+
             # Create indexes
             self.collection.create_index([('user_id', 1)])
             self.collection.create_index([('due_date', 1)])

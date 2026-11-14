@@ -88,7 +88,7 @@ def create_personal_deadline():
     try:
         current_user_id = get_jwt_identity()
         data = request.get_json()
-        
+
         # Validate required fields
         required_fields = ['title', 'due_date', 'priority']
         missing_fields = [field for field in required_fields if not data.get(field)]
@@ -96,7 +96,7 @@ def create_personal_deadline():
             return jsonify({
                 'message': f'Missing required fields: {", ".join(missing_fields)}'
             }), 422
-        
+
         # Format data before sending to model
         deadline_data = {
             'title': data.get('title').strip(),
@@ -107,15 +107,15 @@ def create_personal_deadline():
             'type': 'personal',
             'user_id': current_user_id
         }
-        
+
         # Create deadline
         deadline_id = personal_deadline_model.create_deadline(deadline_data)
-        
+
         return jsonify({
             'message': 'Personal deadline created successfully',
             'id': deadline_id
         }), 201
-        
+
     except ValueError as ve:
         print("Validation error:", str(ve))
         return jsonify({'message': str(ve)}), 422
@@ -138,13 +138,13 @@ def handle_personal_deadline(deadline_id):
             if success:
                 return jsonify({'message': 'Deadline updated successfully'})
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
         elif request.method == 'DELETE':
             success = personal_deadline_model.delete_deadline(deadline_id, user_id)
             if success:
                 return jsonify({'message': 'Deadline deleted successfully'})
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
@@ -184,24 +184,24 @@ def signup():
     ):
         return jsonify({'message': 'Name, email, phone and password are required'}), 400
     data = {key: data[key] for key in required}
-    
+
     if users.find_one({'email': data['email']}):
         return jsonify({'message': 'Email already registered'}), 400
     if users.find_one({'phone': data['phone']}):
         return jsonify({'message': 'Phone number already registered'}), 400
-    
+
     data['password'] = generate_password_hash(data['password'])
-    
+
     # Insert into main database
     user_id = users.insert_one(data).inserted_id
-    
+
     # Insert into personal deadlines database
     personal_db.users.insert_one({
         'original_id': str(user_id),
         'email': data['email'],
         'name': data['name']
     })
-    
+
     return jsonify({'message': 'User created successfully'}), 201
 
 @app.route('/login', methods=['POST'])
@@ -218,7 +218,7 @@ def login():
             {'phone': data.get('identifier')}
         ]
     })
-    
+
     if user and check_password_hash(user['password'], data['password']):
         access_token = create_access_token(identity=str(user['_id']))
         return jsonify({
@@ -246,7 +246,7 @@ def create_deadline():
     try:
         current_user = get_jwt_identity()
         data = request.get_json()
-        
+
         deadline_data = {
             'user_id': current_user,
             'title': data.get('title'),
@@ -256,13 +256,13 @@ def create_deadline():
             'status': data.get('status', 'pending'),
             'type': 'personal'
         }
-        
+
         deadline_id = deadline_model.create_deadline(deadline_data)
         return jsonify({
             'message': 'Deadline created successfully',
             'id': deadline_id
         }), 201
-        
+
     except ValueError as e:
         return jsonify({'message': str(e)}), 422
     except Exception as e:
@@ -311,7 +311,7 @@ def admin_government_deadlines():
                 'subscribers': d.get('subscribers', [])
             } for d in deadlines]
             return jsonify({'deadlines': formatted_deadlines})
-            
+
         elif request.method == 'POST':
             data = request.get_json()
             data['created_at'] = datetime.utcnow().isoformat()
@@ -321,7 +321,7 @@ def admin_government_deadlines():
                 'id': str(result.inserted_id),
                 'message': 'Government deadline created successfully'
             }), 201
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -334,7 +334,7 @@ def admin_handle_govt_deadline(deadline_id):
             if result.deleted_count:
                 return jsonify({'message': 'Deadline deleted successfully'}), 200
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
         elif request.method == 'PUT':
             data = request.get_json()
             result = db.government_deadlines.update_one(
@@ -351,7 +351,7 @@ def admin_handle_govt_deadline(deadline_id):
             if result.modified_count:
                 return jsonify({'message': 'Deadline updated successfully'}), 200
             return jsonify({'message': 'Deadline not found'}), 404
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -379,7 +379,7 @@ def subscribe_to_govt_deadline(deadline_id):
         data = request.get_json()
         user_email = data.get('email')
         subscribed = data.get('subscribed', True)
-        
+
         if not user_email:
             return jsonify({'message': 'Email is required'}), 400
 
@@ -459,7 +459,7 @@ def handle_admin_settings():
                 'notifications_enabled': settings.get('notifications_enabled', True),
                 'email_notifications': settings.get('email_notifications', True)
             })
-            
+
         elif request.method == 'PUT':
             data = request.get_json()
             db.admin_settings.update_one(
@@ -473,7 +473,7 @@ def handle_admin_settings():
                 upsert=True
             )
             return jsonify({'message': 'Settings updated successfully'})
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -484,21 +484,21 @@ def get_admin_analytics():
         total_users = users.count_documents({})
         total_deadlines = db.government_deadlines.count_documents({})
         active_users = len(db.government_deadlines.distinct('subscribers'))
-        
+
         deadline_stats = [{
             'title': d.get('title', ''),
             'total_subscribers': len(d.get('subscribers', [])),
             'active_users': len(d.get('subscribers', [])),
             'completion_rate': 0
         } for d in db.government_deadlines.find()]
-        
+
         user_stats = [{
             'name': u.get('name', ''),
             'subscribed_deadlines': db.government_deadlines.count_documents({'subscribers': u.get('email')}),
             'active_deadlines': db.government_deadlines.count_documents({'subscribers': u.get('email')}),
             'completion_rate': 0
         } for u in users.find({}, {'password': 0})]
-        
+
         return jsonify({
             'summary': {
                 'total_users': total_users,
@@ -508,7 +508,7 @@ def get_admin_analytics():
             'deadlines': deadline_stats,
             'users': user_stats
         })
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -518,14 +518,14 @@ def get_user_statistics():
     try:
         user_id = get_jwt_identity()
         user_deadlines = list(db.deadlines.find({'user_id': user_id}))
-        
+
         return jsonify({
             'total_tasks': len(user_deadlines),
             'in_progress': sum(1 for d in user_deadlines if d.get('status') == 'In Progress'),
             'completed': sum(1 for d in user_deadlines if d.get('status') == 'Completed'),
             'urgent': sum(1 for d in user_deadlines if d.get('priority') == 'High')
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
