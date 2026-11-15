@@ -1,66 +1,100 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import requests
-import os
-from dotenv import load_dotenv
-import logging
+"""Bounded notification adapters. Provider failures are never reported as delivery."""
 
-load_dotenv()
+import os
+import smtplib
+import ssl
+from email.message import EmailMessage
+import requests
+
 
 class NotificationService:
-    def __init__(self):
-        # Email configuration
-        self.email_sender = os.getenv('SMTP_EMAIL')
-        self.email_password = os.getenv('SMTP_PASSWORD')
-        self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        
-        # SMS configuration (using Twilio)
-        self.twilio_sid = os.getenv('TWILIO_ACCOUNT_SID')
-        self.twilio_token = os.getenv('TWILIO_AUTH_TOKEN')
-        self.twilio_phone = os.getenv('TWILIO_PHONE_NUMBER')
+    def __init__(self, config=None):
+        self.config = config or os.environ
+
+    def configured(self, channel):
+        keys = (
+            ("SMTP_SERVER", "SMTP_EMAIL", "SMTP_PASSWORD")
+            if channel == "email"
+            else ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER")
+        )
+        return all(self.config.get(key) for key in keys)
 
     def send_email_notification(self, recipient, subject, message):
+        if not self.configured("email"):
+            return False
+        mail = EmailMessage()
+        mail["From"] = self.config["SMTP_EMAIL"]
+        mail["To"] = recipient
+        mail["Subject"] = subject
+        mail.set_content(message)
         try:
-            msg = MIMEMultipart()
-            msg['From'] = self.email_sender
-            msg['To'] = recipient
-            msg['Subject'] = subject
-            msg.attach(MIMEText(message, 'plain'))
-            
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
-            server.login(self.email_sender, self.email_password)
-            server.send_message(msg)
-            server.quit()
-            
-            logging.info(f"Email sent successfully to {recipient}")
+            host = self.config["SMTP_SERVER"]
+            port = int(self.config.get("SMTP_PORT", 587))
+            if port == 465:
+                connection = smtplib.SMTP_SSL(
+                    host, port, timeout=10, context=ssl.create_default_context()
+                )
+            else:
+                connection = smtplib.SMTP(host, port, timeout=10)
+            with connection as server:
+                if port != 465:
+                    server.starttls(context=ssl.create_default_context())
+                server.login(self.config["SMTP_EMAIL"], self.config["SMTP_PASSWORD"])
+                server.send_message(mail)
             return True
-        except Exception as e:
-            logging.error(f"Email notification error: {str(e)}")
+        except (OSError, smtplib.SMTPException, ValueError):
             return False
 
     def send_sms_notification(self, phone_number, message):
+        if not self.configured("sms"):
+            return False
         try:
-            url = f"https://api.twilio.com/2010-04-01/Accounts/{self.twilio_sid}/Messages.json"
-            data = {
-                'To': phone_number,
-                'From': self.twilio_phone,
-                'Body': message
+            response = requests.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{self.config['TWILIO_ACCOUNT_SID']}/Messages.json",
+                data={
+                    "To": phone_number,
+                    "From": self.config["TWILIO_PHONE_NUMBER"],
+                    "Body": message,
+                },
+                auth=(
+                    self.config["TWILIO_ACCOUNT_SID"],
+                    self.config["TWILIO_AUTH_TOKEN"],
+                ),
+                timeout=10,
+                allow_redirects=False,
+            )
+            return response.status_code == 201
+        except requests.RequestException:
+            return False
+
+    def sms_verification(self, phone, code=None):
+        if not all(
+            self.config.get(k)
+            for k in (
+                "TWILIO_ACCOUNT_SID",
+                "TWILIO_AUTH_TOKEN",
+                "TWILIO_VERIFY_SERVICE_SID",
+            )
+        ):
+            return False
+        try:
+            endpoint = "VerificationCheck" if code is not None else "Verifications"
+            payload = {
+                "To": phone,
+                **({"Code": code} if code is not None else {"Channel": "sms"}),
             }
             response = requests.post(
-                url,
-                data=data,
-                auth=(self.twilio_sid, self.twilio_token)
+                f"https://verify.twilio.com/v2/Services/{self.config['TWILIO_VERIFY_SERVICE_SID']}/{endpoint}",
+                data=payload,
+                auth=(
+                    self.config["TWILIO_ACCOUNT_SID"],
+                    self.config["TWILIO_AUTH_TOKEN"],
+                ),
+                timeout=10,
+                allow_redirects=False,
             )
-            
-            if response.status_code == 201:
-                logging.info(f"SMS sent successfully to {phone_number}")
-                return True
-            else:
-                logging.error(f"SMS failed with status code: {response.status_code}")
-                return False
-        except Exception as e:
-            logging.error(f"SMS notification error: {str(e)}")
+            return response.status_code in (200, 201) and response.json().get("status") == (
+                "approved" if code is not None else "pending"
+            )
+        except (requests.RequestException, ValueError):
             return False

@@ -1,122 +1,192 @@
-from pymongo import MongoClient
+"""Shared deadline validation and access to retained collections."""
+
+from datetime import date, datetime, timezone
 from bson import ObjectId
-from datetime import datetime
-import re
-import os
+
+PRIORITIES = {"low", "medium", "high"}
+STATUSES = {"pending", "in_progress", "completed"}
+CATEGORIES = {"Personal", "Education", "Finance", "Health", "Work", "Other"}
+
+
+def utcnow():
+    return datetime.now(timezone.utc)
+
+
+def checked_text(value, field, maximum, required=False):
+    if not isinstance(value, str) or len(value) > maximum or (required and not value.strip()):
+        raise ValueError(
+            f"{field} must be text of at most {maximum} characters"
+            + (" and cannot be empty." if required else ".")
+        )
+    return value.strip()
+
+
+def validate_date(value):
+    if not isinstance(value, str) or len(value) != 10:
+        raise ValueError("Choose a valid date in YYYY-MM-DD format.")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        raise ValueError("Choose a valid calendar date.") from None
+    if parsed.year < 1900 or parsed.year > 2199:
+        raise ValueError("Choose a date between 1900 and 2199.")
+    return parsed.isoformat()
+
+
+def validate_fields(data, partial=False, government=False):
+    if not isinstance(data, dict):
+        raise ValueError("A JSON object is required.")
+    result = {}
+    defaults = {
+        "description": "",
+        "priority": "medium",
+        "status": "pending",
+        "category": "Personal",
+        "reminder_days": [7, 3, 1, 0],
+    }
+    for field in (
+        "title",
+        "description",
+        "due_date",
+        "priority",
+        "status",
+        "category",
+        "reminder_days",
+    ):
+        if government and field in ("status", "category", "reminder_days"):
+            continue
+        if field not in data and partial:
+            continue
+        value = data.get(field, defaults.get(field))
+        if field in ("title", "description"):
+            value = checked_text(
+                value,
+                field.capitalize(),
+                120 if field == "title" else 3000,
+                field == "title",
+            )
+        elif field == "due_date":
+            value = validate_date(value)
+        elif field in ("priority", "status"):
+            if not isinstance(value, str):
+                raise ValueError(f"Choose a valid {field}.")
+            value = value.lower().replace(" ", "_")
+            if value not in (PRIORITIES if field == "priority" else STATUSES):
+                raise ValueError(f"Choose a valid {field}.")
+        elif field == "category" and (not isinstance(value, str) or value not in CATEGORIES):
+            raise ValueError("Choose a valid category.")
+        elif field == "reminder_days":
+            if (
+                not isinstance(value, list)
+                or len(value) > 5
+                or any(type(d) is not int or d < 0 or d > 30 for d in value)
+            ):
+                raise ValueError("Choose up to 5 reminder days between 0 and 30.")
+            value = sorted(set(value), reverse=True)
+        result[field] = value
+    if government:
+        for field in ("department", "source_url"):
+            if partial and field not in data:
+                continue
+            result[field] = checked_text(
+                data.get(field, ""),
+                field.replace("_", " ").capitalize(),
+                120 if field == "department" else 500,
+                field == "department",
+            )
+        url = result.get("source_url", "")
+        if url:
+            from urllib.parse import urlsplit
+
+            parts = urlsplit(url)
+            if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+                raise ValueError("The source link must be a valid HTTPS URL.")
+    return result
+
+
+def serialize(record, storage="main"):
+    value = {key: val for key, val in record.items() if key not in ("_id", "subscribers")}
+    value["id"] = str(record["_id"])
+    value["_id"] = value["id"]
+    value["storage"] = storage
+    value["priority"] = str(record.get("priority", "medium")).lower()
+    value["status"] = str(record.get("status", "pending")).lower().replace(" ", "_")
+    value.setdefault("category", "Personal")
+    value.setdefault("reminder_days", [7, 3, 1, 0])
+    for field in ("title", "description", "due_date", "department", "source_url"):
+        if field in value and not isinstance(value[field], str):
+            value[field] = ""
+    if value.get("priority") not in PRIORITIES:
+        value["priority"] = "medium"
+    if value.get("status") not in STATUSES:
+        value["status"] = "pending"
+    if not isinstance(value.get("category"), str):
+        value["category"] = "Other"
+    if not isinstance(value["reminder_days"], list) or any(
+        type(d) is not int or not 0 <= d <= 30 for d in value["reminder_days"]
+    ):
+        value["reminder_days"] = [7, 3, 1, 0]
+    for field in ("created_at", "updated_at"):
+        if isinstance(value.get(field), datetime):
+            value[field] = value[field].isoformat()
+    return value
+
 
 class DeadlineModel:
-    def __init__(self, client=None):
-        try:
-            self.client = client if client is not None else MongoClient(os.environ['MONGODB_URI'])
-            self.db = self.client[os.environ['DB_NAME']]
-            self.personal_db = self.client[os.environ['PERSONAL_DB_NAME']]
-            self.collection = self.personal_db['deadlines']
+    def __init__(self, client, db_name=None, personal_db_name=None):
+        import os
 
-            # Create indexes
-            self.collection.create_index([('user_id', 1)])
-            self.collection.create_index([('due_date', 1)])
-        except Exception as e:
-            raise Exception(f"Failed to connect to MongoDB: {str(e)}")
+        self.client = client
+        self.db = client[db_name or os.environ["DB_NAME"]]
+        self.personal_db = client[personal_db_name or os.environ["PERSONAL_DB_NAME"]]
+        self.collection = self.personal_db["deadlines"]
+        self.storage = "legacy"
 
-    def validate_deadline_data(self, deadline_data):
-        try:
-            required_fields = ['user_id', 'title', 'due_date']
-            for field in required_fields:
-                if not deadline_data.get(field):
-                    raise ValueError(f"Missing required field: {field}")
-
-            # Validate date format (YYYY-MM-DD)
-            date_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}$')
-            if not date_pattern.match(deadline_data['due_date']):
-                raise ValueError("Invalid date format. Use YYYY-MM-DD")
-
-            # Set default values
-            deadline_data.setdefault('priority', 'medium')
-            deadline_data.setdefault('status', 'pending')
-            deadline_data.setdefault('description', '')
-
-            return deadline_data
-
-        except Exception as e:
-            raise ValueError(f"Validation error: {str(e)}")
-
-    def create_deadline(self, deadline_data):
-        try:
-            self.validate_deadline_data(deadline_data)
-            deadline_data['created_at'] = datetime.utcnow()
-            deadline_data['updated_at'] = datetime.utcnow()
-            result = self.collection.insert_one(deadline_data)
-            return str(result.inserted_id)
-        except Exception as e:
-            raise Exception(f"Failed to create deadline: {str(e)}")
+    def create_deadline(self, data):
+        value = validate_fields(data)
+        value.update(
+            user_id=data["user_id"],
+            type="personal",
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        return str(self.collection.insert_one(value).inserted_id)
 
     def get_all_deadlines(self, user_id):
-        try:
-            deadlines = self.collection.find({'user_id': user_id})
-            return [{**deadline, '_id': str(deadline['_id'])} for deadline in deadlines]
-        except Exception as e:
-            raise Exception(f"Failed to fetch deadlines: {str(e)}")
+        return [
+            serialize(d, self.storage)
+            for d in self.collection.find({"user_id": user_id}).sort("due_date", 1)
+        ]
+
+    get_user_deadlines = get_all_deadlines
 
     def get_deadline_by_id(self, deadline_id, user_id):
-        deadline = self.collection.find_one({'_id': ObjectId(deadline_id), 'user_id': user_id})
-        if deadline:
-            deadline['_id'] = str(deadline['_id'])
-        return deadline
+        record = self.collection.find_one({"_id": ObjectId(deadline_id), "user_id": user_id})
+        return serialize(record, self.storage) if record else None
 
-    def update_deadline(self, deadline_id, update_data, user_id):
-        allowed = {'title', 'description', 'due_date', 'priority', 'status'}
-        updates = {key: value for key, value in update_data.items() if key in allowed}
-        updates['updated_at'] = datetime.utcnow()
-        result = self.collection.update_one(
-            {'_id': ObjectId(deadline_id), 'user_id': user_id},
-            {'$set': updates}
+    def update_deadline(self, deadline_id, data, user_id):
+        updates = validate_fields(data, partial=True)
+        if not updates:
+            raise ValueError("No supported fields were supplied.")
+        updates["updated_at"] = utcnow()
+        return (
+            self.collection.update_one(
+                {"_id": ObjectId(deadline_id), "user_id": user_id}, {"$set": updates}
+            ).matched_count
+            > 0
         )
-        return result.matched_count > 0
 
     def delete_deadline(self, deadline_id, user_id):
-        result = self.collection.delete_one({'_id': ObjectId(deadline_id), 'user_id': user_id})
-        return result.deleted_count > 0
+        return (
+            self.collection.delete_one(
+                {"_id": ObjectId(deadline_id), "user_id": user_id}
+            ).deleted_count
+            > 0
+        )
 
-    def get_deadlines_by_date(self, date, user_id):
-        deadlines = self.collection.find({
-            'user_id': user_id,
-            'due_date': {'$regex': f'^{date}'}
-        })
-        return [{**deadline, '_id': str(deadline['_id'])} for deadline in deadlines]
-
-class Deadline:
-    def __init__(self, user_id, title, due_date, priority='medium',
-                 description='', status='pending', _id=None, created_at=None):
-        self._id = _id
-        self.user_id = user_id
-        self.title = title
-        self.description = description
-        self.due_date = due_date
-        self.priority = priority
-        self.status = status
-        self.created_at = created_at or datetime.utcnow()
-
-    def to_dict(self):
-        return {
-            'id': str(self._id) if self._id else None,
-            'user_id': self.user_id,
-            'title': self.title,
-            'description': self.description,
-            'due_date': self.due_date,
-            'priority': self.priority,
-            'status': self.status,
-            'created_at': self.created_at.isoformat()
-        }
-
-    @staticmethod
-    def from_dict(data):
-        return Deadline(
-            _id=ObjectId(data['_id']) if '_id' in data else None,
-            user_id=data['user_id'],
-            title=data['title'],
-            description=data.get('description', ''),
-            due_date=data['due_date'],
-            priority=data.get('priority', 'medium'),
-            status=data.get('status', 'pending'),
-            created_at=datetime.fromisoformat(data['created_at']) if 'created_at' in data else None
-        )  # Added missing closing parenthesis
+    def get_deadlines_by_date(self, value, user_id):
+        day = validate_date(value)
+        return [
+            serialize(d, self.storage)
+            for d in self.collection.find({"user_id": user_id, "due_date": day})
+        ]
