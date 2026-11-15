@@ -1132,6 +1132,7 @@ class AlertMeWindow(QMainWindow):
                 Path(path).write_text(
                     as_csv(entries) if kind == "csv" else as_calendar(entries),
                     encoding="utf-8",
+                    newline="",
                 )
                 self.statusBar().showMessage("Export saved.", 5000)
             except OSError:

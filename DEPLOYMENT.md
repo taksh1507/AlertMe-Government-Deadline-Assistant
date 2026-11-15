@@ -31,6 +31,11 @@ The application is a native Qt client, not an embedded browser. Tested desktop
 sizes are 1440×960 and 1024×768; the browser interface provides the mobile layout.
 Prebuilt Windows/macOS installers are not included.
 
+On minimal Linux hosts, install the Qt runtime libraries required by the host
+platform. The offscreen CI job explicitly installs `libegl1`, `libopengl0`,
+`libgl1`, `libxkbcommon0` and `libfontconfig1`; a graphical X11/Wayland session may
+need additional platform packages supplied by the desktop distribution.
+
 ## Reminder process
 
 Run `python -m Alertme.src.backend.services.deadline_scanner` under a process
