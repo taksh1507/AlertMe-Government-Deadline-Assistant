@@ -1,20 +1,20 @@
-"""
-AlertMe - Government Deadline Assistant
-Copyright (c) 2025 AlertMe. All rights reserved.
-
-This software is for non-commercial use only.
-Any commercial use, reproduction, or distribution without permission is strictly prohibited.
-"""
+"""Launch the native AlertMe desktop application."""
 
 import sys
+from pathlib import Path
+from dotenv import load_dotenv
 from PyQt6.QtWidgets import QApplication
-from src.frontend.windows.login_window import LoginWindow
+from src.frontend.desktop import AlertMeWindow
+
 
 def main():
-    app = QApplication(sys.argv)
-    window = LoginWindow()
+    load_dotenv(Path(__file__).parent / ".env")
+    application = QApplication(sys.argv)
+    application.setApplicationName("AlertMe")
+    window = AlertMeWindow()
     window.show()
-    sys.exit(app.exec())
+    sys.exit(application.exec())
+
 
 if __name__ == "__main__":
     main()
