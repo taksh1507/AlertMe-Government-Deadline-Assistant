@@ -295,6 +295,15 @@ function settings() {
     return `<section class="panel">${panelHeader('Administrator workspace', 'Publish useful dates from Government and keep source links up to date.')}<p class="muted">${esc(u.email)}</p><p class="muted">Both native desktop and web use this same publishing account. Your changes appear on the next workspace refresh.</p></section>`;
   return `<div class="settings-grid"><section class="panel">${panelHeader('Your account', 'A few details to make this feel like yours.')}<form id="profile-form"><label>Display name<input name="name" value="${esc(u.name)}" maxlength="80" required></label><label>Email<input value="${esc(u.email)}" readonly></label>${u.phone ? `<label>Phone<input value="${esc(u.phone)}" readonly></label>` : ''}<button class="button primary" type="submit">Save name</button></form></section><section class="panel">${panelHeader('Contact verification', 'Keep your reminders pointed at the right place.')}${['email', 'sms'].map((c) => `<div class="contact-row"><div><strong>${c === 'email' ? 'Email' : 'SMS'}</strong><small>${u[c === 'email' ? 'email_verified' : 'phone_verified'] ? 'Verified' : 'Verification needed'} · ${data.delivery[c] ? 'Provider configured' : 'Provider not configured'}</small></div><button class="button" data-action="verify" data-id="${c}" ${c === 'sms' && !u.phone ? 'disabled' : ''}>Verify ${c === 'email' ? 'email' : 'phone'}</button></div>`).join('')}<p>Verification requires a configured delivery provider. Add your phone number during signup if you want SMS reminders.</p></section><section class="panel">${panelHeader('A timely little nudge', 'Choose how you’d like to hear from AlertMe.')}<form id="preferences-form"><label class="check-row"><input name="email" type="checkbox" ${u.preferences?.email ? 'checked' : ''}>Email reminders</label><label class="check-row"><input name="sms" type="checkbox" ${u.preferences?.sms ? 'checked' : ''}>SMS reminders</label><p>Verify a contact before enabling its channel. Your operator needs to keep the reminder worker running.</p><button class="button primary" type="submit">Save reminder preferences</button></form></section><section class="panel">${panelHeader('Change password', 'You’ll sign in again after updating your password.')}<form id="password-form"><label>Current password<input type="password" name="current_password" autocomplete="current-password" required maxlength="128"></label><label>New password<input type="password" name="new_password" autocomplete="new-password" minlength="10" maxlength="128" required></label><p>Use 10–128 characters, including a letter and a number.</p><button class="button" type="submit">Update password</button></form></section></div>`;
 }
+function renderAccount() {
+  if (!data) return;
+  const admin = data.user.is_admin;
+  $('account-name').textContent = data.user.name;
+  $('account-role').textContent = admin ? 'Administrator' : 'Personal account';
+  $('avatar').textContent = $('top-avatar').textContent = (data.user.name || 'Y')
+    .slice(0, 1)
+    .toUpperCase();
+}
 function render() {
   if (!data) return;
   const admin = data.user.is_admin;
@@ -305,11 +314,7 @@ function render() {
     if (a.dataset.view === view) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  $('account-name').textContent = data.user.name;
-  $('account-role').textContent = admin ? 'Administrator' : 'Personal account';
-  $('avatar').textContent = $('top-avatar').textContent = (data.user.name || 'Y')
-    .slice(0, 1)
-    .toUpperCase();
+  renderAccount();
   $('crumb').textContent = view === 'personal' ? 'My deadlines' : titleCase(view);
   $('page-title').textContent = config[view][0];
   $('page-subtitle').textContent = config[view][1];
@@ -693,6 +698,7 @@ $('view').addEventListener('submit', async (e) => {
   e.preventDefault();
   const button = e.target.querySelector('button[type=submit]');
   if (!button) return;
+  const owner = data?.user?.id;
   button.disabled = true;
   try {
     const form = Object.fromEntries(new FormData(e.target));
@@ -700,7 +706,7 @@ $('view').addEventListener('submit', async (e) => {
       await api('/api/me/password', { method: 'POST', value: form });
       showAuth('Password changed. Sign in again.');
     } else if (e.target.id === 'preferences-form') {
-      await api('/api/me', {
+      const result = await api('/api/me', {
         method: 'PUT',
         value: {
           preferences: {
@@ -709,11 +715,15 @@ $('view').addEventListener('submit', async (e) => {
           },
         },
       });
-      await loadWorkspace();
+      if (!data || data.user.id !== owner) return;
+      data.user.preferences = result.preferences;
       toast('Reminder preferences saved.');
     } else if (e.target.id === 'profile-form') {
-      await api('/api/me', { method: 'PUT', value: { name: form.name } });
-      await loadWorkspace();
+      const result = await api('/api/me', { method: 'PUT', value: { name: form.name } });
+      if (!data || data.user.id !== owner) return;
+      data.user.name = result.name;
+      e.target.elements.name.value = result.name;
+      renderAccount();
       toast('Name saved.');
     }
   } catch (error) {

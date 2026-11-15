@@ -270,3 +270,45 @@ test('workspace layouts, keyboard dialogs and accessibility stay usable', async 
     await expect(page.locator('#sidebar')).not.toHaveClass(/open/);
   }
 });
+
+test('saving settings preserves drafts in other forms', async ({ page }) => {
+  const account = await signup(page);
+  await nav(page, 'settings');
+  await page.getByRole('button', { name: 'Verify email', exact: true }).click();
+  const code = (
+    await (
+      await page.request.get('/_test/email-code?email=' + encodeURIComponent(account.email))
+    ).json()
+  ).code;
+  await page.getByLabel('6-digit code', { exact: true }).fill(code);
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Verify contact', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  let received, release;
+  const started = new Promise((resolve) => (received = resolve));
+  const gate = new Promise((resolve) => (release = resolve));
+  await page.route('**/api/me', async (route) => {
+    if (route.request().method() === 'PUT' && route.request().postDataJSON()?.preferences) {
+      received();
+      await gate;
+    }
+    await route.continue();
+  });
+  await page.getByLabel('Email reminders', { exact: true }).check();
+  await page.getByRole('button', { name: 'Save reminder preferences', exact: true }).click();
+  await started;
+  await page.getByLabel('Current password', { exact: true }).fill('Browser-password123');
+  await page.getByLabel('New password', { exact: true }).fill('Retained-password123');
+  release();
+  await expect(page.getByRole('status')).toHaveText('Reminder preferences saved.');
+  await expect(page.getByLabel('Current password', { exact: true })).toHaveValue(
+    'Browser-password123',
+  );
+  await expect(page.getByLabel('New password', { exact: true })).toHaveValue(
+    'Retained-password123',
+  );
+  await page.getByRole('button', { name: 'Update password', exact: true }).click();
+  await expect(page.locator('#auth')).toBeVisible();
+});

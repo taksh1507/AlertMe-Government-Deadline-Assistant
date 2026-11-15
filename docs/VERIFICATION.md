@@ -9,7 +9,7 @@ explicit test fixtures.
 | Ruff checks and formatting | Passed |
 | Python compilation | Passed |
 | API, native desktop, delivery adapter and export tests | 50 passed |
-| Website workflow and layout tests | 18 passed |
+| Website workflow and layout tests | 21 passed |
 | Website sizes | Desktop 1440px, tablet 768px, mobile 390px |
 | Native window sizes | 1440×960 and 1024×768 |
 
@@ -28,7 +28,7 @@ navigation, password updates and actual file exports.
 
 Website tests cover account and personal-deadline flows, publishing, following,
 calendar dates, verification/preferences, password changes, logout, failed-save
-recovery, responsive navigation, keyboard dialogs and axe checks for all six
+recovery, delayed settings saves with sibling-form draft retention, responsive navigation, keyboard dialogs and axe checks for all six
 workspace views. These checks supplement visual review and do not certify every
 browser or assistive technology.
 
