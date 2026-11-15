@@ -15,8 +15,9 @@ explicit test fixtures.
 
 The Python suite runs through the real API against MongoDB when
 `TEST_MONGODB_URI` points to an explicitly disposable loopback server and
-`ALLOW_TEST_DATABASE_RESET=1`. Without that setting, its MongoDB fixture is
-in-memory. The native tests drive actual PyQt widgets and Qt HTTP requests through
+`ALLOW_TEST_DATABASE_RESET=1`. These variables are required for database-backed
+tests; no in-memory database substitute is used. The native tests drive actual
+PyQt widgets and Qt HTTP requests through
 a temporary local server; screenshots use Qt's offscreen platform.
 
 Coverage includes signup, sign-in, ownership, input validation, account/index

@@ -8,7 +8,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
-import mongomock
 from pymongo import MongoClient
 from urllib.parse import urlsplit
 from werkzeug.security import generate_password_hash
@@ -38,20 +37,17 @@ class FakeNotifier:
 
 @pytest.fixture
 def database():
-    uri = os.getenv("TEST_MONGODB_URI")
-    if uri:
-        parsed = urlsplit(uri)
-        if (
-            parsed.hostname not in ("localhost", "127.0.0.1", "::1")
-            or os.getenv("ALLOW_TEST_DATABASE_RESET") != "1"
-        ):
-            raise RuntimeError(
-                "Real database tests require explicit reset authorization and loopback MongoDB."
-            )
-        client = MongoClient(uri, serverSelectionTimeoutMS=3000)
-        client.admin.command("ping")
-    else:
-        client = mongomock.MongoClient()
+    uri = os.getenv("TEST_MONGODB_URI", "")
+    parsed = urlsplit(uri)
+    if (
+        parsed.hostname not in ("localhost", "127.0.0.1", "::1")
+        or os.getenv("ALLOW_TEST_DATABASE_RESET") != "1"
+    ):
+        raise RuntimeError(
+            "Set TEST_MONGODB_URI to a disposable loopback MongoDB and ALLOW_TEST_DATABASE_RESET=1. See README verification setup."
+        )
+    client = MongoClient(uri, serverSelectionTimeoutMS=3000)
+    client.admin.command("ping")
     for name in ("alertme_test", "alertme_legacy_test"):
         client.drop_database(name)
     yield client

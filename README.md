@@ -149,17 +149,21 @@ legacy account indexes and following published deadlines in the new workspace.
 
 ## Verification
 
+The integration/native suite requires a **disposable loopback MongoDB**. Set the
+following variables before running it (PowerShell: use `$env:NAME="value"`):
+
 ```bash
+export TEST_MONGODB_URI=mongodb://127.0.0.1:27017
+export ALLOW_TEST_DATABASE_RESET=1
 python -m pip install -r requirements-test.txt
 python -m ruff check Alertme tests
 python -m compileall -q Alertme
 python -m pytest tests -q
 ```
 
-By default, API tests use an explicit in-memory MongoDB fixture. To run the suite
-against **disposable loopback MongoDB**, set `TEST_MONGODB_URI` and
-`ALLOW_TEST_DATABASE_RESET=1`. Tests reset only their named `_test` databases;
-never use application data. Native automation uses Qt's offscreen platform.
+Tests reset only their named `_test` databases; never use application data.
+The database is real MongoDB so index and concurrency behavior match the API.
+Native automation uses Qt's offscreen platform.
 
 Browser tests also require that explicitly disposable MongoDB server:
 
