@@ -1,129 +1,183 @@
-# AlertMe — Government Deadline Assistant
+# AlertMe
 
-[![GUI: PyQt6](https://img.shields.io/badge/GUI-PyQt6-4479A1?logo=python&logoColor=white)](Alertme/src/frontend)
-[![Backend: Flask](https://img.shields.io/badge/backend-Flask-000000?logo=flask&logoColor=white)](Alertme/src/backend)
-[![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](Alertme/requirements.txt)
-[![Database: MongoDB](https://img.shields.io/badge/database-MongoDB-4EA94B?logo=mongodb&logoColor=white)](Alertme/src/backend)
-[![Auth: Firebase + JWT](https://img.shields.io/badge/auth-Firebase%20%7C%20JWT-FFCA28?logo=firebase&logoColor=white)](Alertme/src/backend)
-[![Notifications: Twilio](https://img.shields.io/badge/notifications-Twilio-F22F46?logo=twilio&logoColor=white)](Alertme/src/backend/services)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**A little ahead, every day.** A connected deadline workspace with a **native PyQt6 desktop app** and a **responsive website**, backed by one Flask API and MongoDB.
 
-**AlertMe is a desktop application that helps users track and manage government deadlines efficiently.** It provides notifications, deadline management, and a user-friendly interface for both regular users and administrators, with an admin panel for government deadline publishing.
+[![Application verification](https://github.com/taksh1507/AlertMe-Government-Deadline-Assistant/actions/workflows/verification.yml/badge.svg)](https://github.com/taksh1507/AlertMe-Government-Deadline-Assistant/actions)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-6355cd)](Alertme/requirements.txt)
+[![License](https://img.shields.io/badge/license-Non--Commercial-75638d)](LICENSE)
 
-> Copyright (c) 2025 AlertMe. All rights reserved. Non-commercial use only — see LICENSE.
+![Native desktop workspace](docs/screenshots/native-overview.png)
 
-## Features
+## One account. Two ways to stay on track.
 
-- **User authentication system** — signup, login, JWT-based sessions
-- **Personal deadline management** — create, track, organize deadlines by priority
-- **Government deadline tracking** — admin-published official deadlines
-- **SMS and email notifications** — deadline reminders via Twilio and SMTP
-- **Interactive calendar view** — visualize upcoming deadlines
-- **Admin panel** — government users publish and manage official deadlines
-- **Real-time deadline updates** — live status changes across the app
-- **Priority-based organization** — sort and filter deadlines by urgency
+The desktop app uses real Qt widgets and asynchronous Qt networking. The website
+works on desktop, tablet and mobile browsers. Both connect to the same API, so
+changes appear after refresh in either client.
 
-## Technology Stack
+- **Personal deadlines:** create, edit, complete and organize dates by priority,
+  category and status, with configurable reminder days.
+- **Published deadlines:** administrators publish dates with department details
+  and source links. Users follow a deadline to add it to their calendar.
+- **Useful views:** upcoming, this-week, overdue and completed counts; searchable
+  lists; priority/status filters; and a calendar of personal and followed dates.
+- **Portable plans:** export the current filtered list as CSV or an all-day `.ics`
+  calendar file, including correctly adjusted end dates.
+- **Reminder preferences:** email and SMS verification, opt-in channels, and actual
+  delivery-attempt history. A separate worker handles scheduled reminders.
+- **Consistent account flows:** signup, sign-in, administrator publishing, contact
+  verification, password changes and sign-out on desktop and web.
 
-| Layer | Choice | Purpose |
-| --- | --- | --- |
-| Desktop GUI | PyQt6 | Cross-platform desktop windows and widgets |
-| Backend API | Flask + Flask-CORS | REST API serving the desktop client |
-| Database | MongoDB (pymongo) | Users, deadlines, notifications |
-| Auth | Firebase Admin + PyJWT | Authentication and JWT sessions |
-| Notifications | Twilio (SMS), SMTP (email) | Deadline reminders |
-| Secrets | python-dotenv | Environment-based configuration |
+<details>
+<summary>See the website and mobile layout</summary>
 
-## Project Structure
+![Web workspace](docs/screenshots/web-overview.png)
 
-```text
-AlertMe/
-├── Alertme/                        # Application source
-│   ├── main.py                     # PyQt6 entry point (LoginWindow)
-│   ├── requirements.txt            # Pinned Python dependencies
-│   ├── src/
-│   │   ├── __init__.py
-│   │   ├── app.py                  # Flask application factory
-│   │   ├── backend/
-│   │   │   ├── __init__.py
-│   │   │   ├── routes/             # auth, admin, deadline route blueprints
-│   │   │   │   ├── admin_routes.py
-│   │   │   │   └── auth_routes.py
-│   │   │   ├── services/           # deadline scanner, notification service
-│   │   │   │   ├── deadline_scanner.py
-│   │   │   │   └── notification_service.py
-│   │   │   ├── models/             # deadline, personal_deadline, user models
-│   │   │   │   ├── deadline.py
-│   │   │   │   ├── personal_deadline.py
-│   │   │   │   └── user.py
-│   │   │   └── utils/              # auth utilities
-│   │   │       └── auth_utils.py
-│   │   ├── database/               # db_connector.py (MongoDB)
-│   │   └── frontend/
-│   │       ├── components/         # reusable Qt widgets/dialogs
-│   │       │   ├── deadline_dialog.py
-│   │       │   ├── fancy_widgets.py
-│   │   │   └── government_deadline_dialog.py
-│   │       └── windows/            # login window and other top-level windows
-│   └── .env                        # tracked secrets file — see Security notes
-├── CLOUD_SETUP.txt
-├── DOCUMENTATION.txt
-├── NOTIFICATION_SETUP.txt
-├── SETUP.txt
-├── .gitignore
-├── LICENSE
-└── README.md
-```
+<img src="docs/screenshots/web-mobile.png" alt="AlertMe website on a mobile screen" width="320">
 
-## Setup
+Screenshots use synthetic test accounts and example deadlines. They do not imply
+affiliation with a government department or availability of actual applications.
+</details>
+
+## Run desktop and web locally
+
+Use **Python 3.12+**, MongoDB 8, and a desktop environment for the native app.
 
 ```bash
-# Clone the repository
 git clone https://github.com/taksh1507/AlertMe-Government-Deadline-Assistant.git
-cd AlertMe-Government-Deadline-Assistant/Alertme
-
-# Create a virtual environment and install dependencies
+cd AlertMe-Government-Deadline-Assistant
 python -m venv .venv
-# Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-
-# Configure environment
-# Copy your credentials into Alertme/.env (see Security notes below)
-# The app expects JWT_SECRET_KEY, ADMIN_EMAIL, ADMIN_PASSWORD, MongoDB URI,
-# Twilio credentials, Firebase credentials, and OpenAI key as applicable.
-
-# Run
-python main.py
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r Alertme/requirements.txt
 ```
 
-The desktop GUI requires a working display; there is no headless mode.
+Copy `Alertme/.env.example` to `Alertme/.env`. Set `MONGODB_URI`, the database
+names, and a unique random `JWT_SECRET_KEY` of at least 32 characters. For example,
+generate a value locally with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+Keep actual environment values out of Git.
 
-## Verification Status
+Start the shared API and website from the repository root:
 
-Verified in this audit:
+```bash
+python -m Alertme.src.backend.app
+```
 
-| Check | Result |
+Open **http://127.0.0.1:5000** for the website. In another terminal with the same
+virtual environment, start the **native desktop app**:
+
+```bash
+python Alertme/main.py
+```
+
+Create an account in either interface, then sign in from the other. The desktop
+uses `ALERTME_API_URL` from `Alertme/.env`; remote API hosts require HTTPS.
+No email/SMS account is needed to manage personal deadlines. Delivery features
+require the optional provider configuration described below.
+
+For an API/web-only host, install `Alertme/requirements-api.txt` instead of the
+full desktop requirements. The website requires this running API; it is not a
+standalone GitHub Pages site. Public hosting is not provisioned by this repository.
+
+## Publish and follow deadlines
+
+Configure the optional `ADMIN_EMAIL` and `ADMIN_PASSWORD_HASH` on the API host.
+Generate a hash locally without putting a plaintext password in a command:
+
+```bash
+python -c "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass('Admin password: ')))"
+```
+
+Use **Administrator sign-in**, then publish from Government. Include a useful
+source URL so users can check current requirements. A published item is maintained
+by the application's administrator; AlertMe does not scrape official portals or
+submit applications on the user's behalf.
+
+Regular accounts can follow and unfollow published deadlines. Public lists show
+deadline information, not subscriber contact details.
+
+## Enable reminders
+
+1. Set the SMTP and/or Twilio values in `Alertme/.env`. SMS contact verification
+   additionally uses `TWILIO_VERIFY_SERVICE_SID`.
+2. In Settings, verify the desired contact and enable its reminder channel.
+3. Run the worker as a separate process:
+
+```bash
+python -m Alertme.src.backend.services.deadline_scanner
+# Or scan once for a scheduler/job runner:
+python -m Alertme.src.backend.services.deadline_scanner --once
+```
+
+The worker uses `APP_TIMEZONE` (default `UTC`) and each deadline's reminder-day
+list. It records one attempt per due-date/reminder-day/channel occurrence and
+shows sent/failed outcomes in Reminders. Failed attempts are retained for review;
+they are not silently reported as delivered or retried without bound. Monitor the
+worker and provider account when operating a hosted installation.
+
+The desktop app and website refresh once a minute while open, avoiding active
+editing/settings forms. The worker can continue when clients are closed. Native
+OS tray notifications, push delivery, offline synchronization and automatic
+portal discovery are not implemented.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Desktop[Native PyQt6 widgets] --> API[Flask API]
+    Web[Responsive HTML/CSS/JS] --> API
+    API --> Mongo[(MongoDB)]
+    Worker[Reminder worker] --> Mongo
+    Worker --> Delivery[SMTP / Twilio]
+    API --> Contacts[Contact verification]
+```
+
+| Location | Responsibility |
 | --- | --- |
-| Python syntax (`compileall` on `main.py` + `src/`) | PASS — all files parse cleanly |
-| Dependency install (`pip install -r requirements.txt`) | environment-limited — see notes below |
-| GUI runtime | not testable here — PyQt6 desktop app requires a display and PyQt6 wheels for this Python version |
+| `Alertme/src/frontend/desktop.py` | Native windows, dialogs, calendar, tables and account flows |
+| `Alertme/src/frontend/api_client.py` | Qt event-loop networking with bounded requests |
+| `Alertme/src/web/` | Same-origin responsive website and local assets |
+| `Alertme/src/backend/app.py` | Configured application factory and shared API routes |
+| `Alertme/src/backend/models/` | Shared validation and retained deadline collections |
+| `Alertme/src/backend/services/` | Delivery adapters and reminder worker |
+| `Alertme/src/shared/exporting.py` | Native CSV and calendar-file formatting |
 
-Notes:
-- `requirements.txt` pins `PyQt6==6.5.0`, `Flask==2.3.2`, `openai==0.27.8` and other older pins that have no Python 3.14 wheels. Install unpinned newer versions on modern Python; the dependency set targets older Python releases.
-- No test suite or CI workflow exists in the repository; verification above is syntax-level, not automated.
+Existing personal records in both configured deadline databases remain visible;
+the application does not discard one store when opening the other. Back up an
+existing installation before upgrading. See [upgrade notes](DEPLOYMENT.md) for
+legacy account indexes and following published deadlines in the new workspace.
 
-## Fixes Applied (this audit)
+## Verification
 
-1. **`src/backend/routes/auth_routes.py:61`** — missing comma in `jwt.encode({...}, os.getenv('JWT_SECRET_KEY'), algorithm='HS256')` caused a syntax error; the app could not even import.
-2. **`src/backend/routes/auth_routes.py`** — `datetime.utcnow()` (removed in Python 3.12) replaced with `datetime.now(timezone.utc)` for forward compatibility.
+The integration/native suite requires a **disposable loopback MongoDB**. Set the
+following variables before running it (PowerShell: use `$env:NAME="value"`):
 
-## ⚠️ Security Notes
+```bash
+export TEST_MONGODB_URI=mongodb://127.0.0.1:27017
+export ALLOW_TEST_DATABASE_RESET=1
+python -m pip install -r requirements-test.txt
+python -m ruff check Alertme tests
+python -m compileall -q Alertme
+python -m pytest tests -q
+```
 
-1. **`Alertme/.env` is tracked in git** (444 bytes) although `.env` appears in `.gitignore`. A tracked `.env` typically contains secrets (JWT secret, admin credentials, MongoDB URI, Twilio/Firebase/OpenAI keys). **Recommended:** remove it from tracking (`git rm --cached Alertme/.env`) and rotate any credentials it contains. Do not print or commit its contents.
-2. `auth_routes.py` falls back to placeholder admin credentials (`your_admin_email` / `your_admin_password`) when env vars are unset — set real values in `.env` before any non-personal use.
-3. Never commit real Twilio, Firebase, or OpenAI credentials.
+Tests reset only their named `_test` databases; never use application data.
+The database is real MongoDB so index and concurrency behavior match the API.
+Native automation uses Qt's offscreen platform.
 
-## License
+Browser tests also require that explicitly disposable MongoDB server:
 
-MIT License — see [LICENSE](LICENSE) for details.
+```bash
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run check:web
+npm run test:web
+```
+
+Use `PLAYWRIGHT_CHROMIUM_EXECUTABLE` for a system browser and
+`ALERTME_TEST_PYTHON` when the test runner needs a specific Python executable.
+See [verification notes](docs/VERIFICATION.md) for coverage and recorded results.
+
+[Deployment](DEPLOYMENT.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
+
+Copyright (c) 2025 AlertMe. **Non-commercial use only**, under the existing license.

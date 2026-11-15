@@ -1,12 +1,13 @@
+"""Database creation is owned by the application factory."""
+
 import os
 from pymongo import MongoClient
-from dotenv import load_dotenv
 
-load_dotenv()
 
-# Initialize MongoDB client
-client = MongoClient('mongodb://your_mongodb_uri')
-db = client['your_database_name']
-
-# Export the db object
-__all__ = ['db']
+def create_client():
+    uri = os.getenv("MONGODB_URI")
+    if not uri:
+        raise RuntimeError("MONGODB_URI is required")
+    return MongoClient(
+        uri, serverSelectionTimeoutMS=4000, connectTimeoutMS=4000, socketTimeoutMS=5000
+    )

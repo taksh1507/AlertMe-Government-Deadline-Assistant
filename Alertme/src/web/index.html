@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#6355cd" />
+    <meta
+      name="description"
+      content="AlertMe brings personal plans and published deadlines into one calm workspace, on desktop and web."
+    />
+    <title>AlertMe — A little ahead, every day</title>
+    <link rel="icon" href="/static/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/app.css" />
+    <script type="module" src="/static/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to workspace</a>
+    <section id="auth" class="auth-shell" aria-labelledby="auth-title">
+      <aside class="auth-hero">
+        <a class="brand" href="/"
+          ><img src="/static/mark.svg" alt="" width="40" height="40" />AlertMe<span
+            class="brand-dot"
+            >.</span
+          ></a
+        >
+        <div>
+          <p class="eyebrow">A LITTLE AHEAD, EVERY DAY</p>
+          <h1>A little ahead.<br />A lot less to<br />worry about.</h1>
+          <p class="hero-copy">
+            Keep important dates in sight.<br />Make space for everything else.
+          </p>
+          <div class="preview-card">
+            <span class="preview-icon">✓</span>
+            <div>
+              <strong>Your next step, made clearer.</strong>
+              <p>Personal plans. Published deadlines.<br />One calm place to stay on track.</p>
+            </div>
+            <span class="preview-star">✧</span>
+          </div>
+        </div>
+        <p class="auth-foot">Native desktop + web. One connected workspace.</p>
+      </aside>
+      <div class="auth-panel">
+        <form id="auth-form">
+          <p class="eyebrow">WELCOME TO ALERTME</p>
+          <h2 id="auth-title">Good to see you.</h2>
+          <p class="muted" id="auth-subtitle">Sign in to pick up where you left off.</p>
+          <label id="name-label" hidden
+            >Full name<input id="auth-name" name="name" autocomplete="name" maxlength="80" /></label
+          ><label
+            >Email or phone<input
+              id="auth-identifier"
+              name="identifier"
+              autocomplete="username"
+              required
+              maxlength="254"
+              placeholder="you@example.com" /></label
+          ><label id="phone-label" hidden
+            >Phone number (optional)<input
+              id="auth-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              maxlength="16"
+              placeholder="+919876543210" /></label
+          ><label
+            >Password<input
+              id="auth-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              maxlength="128"
+              placeholder="Your password"
+          /></label>
+          <p id="password-hint" class="small muted" hidden>
+            Use 10–128 characters, including a letter and a number.
+          </p>
+          <label class="check-row" id="admin-label"
+            ><input id="auth-admin" type="checkbox" /> Administrator sign-in</label
+          >
+          <p id="auth-error" role="alert" class="error"></p>
+          <button class="button primary full" id="auth-submit" type="submit">
+            Sign in <span aria-hidden="true">→</span>
+          </button>
+          <p class="switch-line">
+            <span id="switch-label">New here?</span>
+            <button type="button" class="text-button" id="auth-switch">Create an account</button>
+          </p>
+          <div class="auth-note">
+            <span aria-hidden="true">◇</span>
+            <p>
+              Your desktop and browser use the same account.<br />Enable reminders after verifying
+              your contact.
+            </p>
+          </div>
+        </form>
+      </div>
+    </section>
+    <div id="workspace" hidden>
+      <aside class="sidebar" id="sidebar">
+        <a href="#overview" class="brand"
+          ><img src="/static/mark.svg" alt="" width="36" height="36" />AlertMe<span
+            class="brand-dot"
+            >.</span
+          ></a
+        ><span class="brand-caption">A LITTLE AHEAD, EVERY DAY</span>
+        <p class="nav-caption">YOUR WORKSPACE</p>
+        <nav aria-label="Main navigation">
+          <a href="#overview" data-view="overview"><span data-icon="overview"></span>Overview</a
+          ><a href="#personal" data-view="personal"><span data-icon="list"></span>My deadlines</a
+          ><a href="#government" data-view="government"
+            ><span data-icon="building"></span>Government</a
+          ><a href="#calendar" data-view="calendar"><span data-icon="calendar"></span>Calendar</a
+          ><a href="#reminders" data-view="reminders"><span data-icon="bell"></span>Reminders</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="sidebar-note">
+            <span>✧</span><strong>A little more breathing room.</strong>
+            <p>Everything important,<br />a little more in focus.</p>
+          </div>
+          <a href="#settings" class="settings-link"
+            ><span data-icon="settings"></span>Workspace settings</a
+          >
+          <div class="account">
+            <span class="avatar" id="avatar">Y</span>
+            <div>
+              <strong id="account-name">Your workspace</strong
+              ><small id="account-role">Personal account</small>
+            </div>
+            <button id="sign-out" class="icon-button" aria-label="Sign out">
+              <span data-icon="logout"></span>
+            </button>
+          </div>
+        </div>
+      </aside>
+      <div class="workspace-shell">
+        <header class="topbar">
+          <button
+            class="icon-button menu-toggle"
+            id="menu-toggle"
+            aria-label="Toggle navigation"
+            aria-expanded="false"
+            aria-controls="sidebar"
+          >
+            <span data-icon="menu"></span>
+          </button>
+          <div class="breadcrumb">Workspace <span>/</span><strong id="crumb">Overview</strong></div>
+          <div class="top-actions">
+            <span class="sync-label" id="sync-label">Your connected workspace</span
+            ><button class="icon-button" id="refresh" aria-label="Refresh deadlines">
+              <span data-icon="refresh"></span></button
+            ><a href="#reminders" class="icon-button" aria-label="Reminder history"
+              ><span data-icon="bell"></span></a
+            ><a href="#settings" class="avatar small" aria-label="Account settings" id="top-avatar"
+              >Y</a
+            >
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <div id="error-banner" role="alert" class="error-banner" hidden></div>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" id="greeting">A CLEARER VIEW OF WHAT’S NEXT</p>
+              <h1 id="page-title">One less thing<br />to keep in mind<span>.</span></h1>
+              <p class="muted" id="page-subtitle">Your important dates, all in one place.</p>
+            </div>
+            <button class="button primary" id="new-deadline">
+              <span data-icon="plus"></span> New deadline
+            </button>
+          </div>
+          <div id="view"></div>
+          <footer>
+            <span><b>AlertMe</b> · A little ahead, every day.</span
+            ><span>Personal plans. Clear next steps.</span>
+          </footer>
+        </main>
+      </div>
+    </div>
+    <dialog id="editor" aria-labelledby="editor-title">
+      <form id="editor-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MAKE ROOM FOR YOUR PLANS</p>
+            <h2 id="editor-title">New deadline</h2>
+          </div>
+          <button type="button" class="icon-button" data-close aria-label="Close dialog">
+            <span data-icon="close"></span>
+          </button>
+        </div>
+        <div id="editor-fields"></div>
+        <p id="editor-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button" type="button" data-close>Cancel</button
+          ><button class="button primary" type="submit" id="editor-save">Save deadline</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>

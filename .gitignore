@@ -175,3 +175,11 @@ cython_debug/
 # .gitignore
 .env
 
+
+# Local web tooling and verification output
+node_modules/
+test-results/
+playwright-report/
+.env.*
+!.env.example
+!Alertme/.env.example
