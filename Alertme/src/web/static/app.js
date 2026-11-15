@@ -1,15 +1,32 @@
+import { runtime } from './runtime-config.js';
+import {
+  localRequest,
+  localBackup,
+  restoreLocal,
+  emptyWorkspace,
+  validateWorkspace,
+  localStorageKey,
+} from './local-workspace.js';
+const isLocal = runtime.mode === 'local';
+const isRemote = runtime.mode === 'remote';
+let remoteToken = '';
+let localBlocked = false;
 import { icon } from './icons.js';
 const $ = (id) => document.getElementById(id);
 const esc = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+    (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ],
   );
 const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-const dayNumber = (value) => Math.floor(new Date(value + 'T12:00:00Z').getTime() / 86400000);
+const dayNumber = (value) =>
+  Math.floor(new Date(value + 'T12:00:00Z').getTime() / 86400000);
 const displayDate = (value) =>
   /^\d{4}-\d{2}-\d{2}$/.test(value || '')
     ? new Date(value + 'T12:00:00').toLocaleDateString('en-IN', {
@@ -37,18 +54,35 @@ const titleCase = (value) =>
     .replaceAll('_', ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 const config = {
-  overview: ['One less thing to keep in mind.', 'Your important dates, all in one place.'],
-  personal: ['Make room for your plans.', 'Add, organize and complete your personal deadlines.'],
+  overview: [
+    'One less thing to keep in mind.',
+    'Your important dates, all in one place.',
+  ],
+  personal: [
+    'Make room for your plans.',
+    'Add, organize and complete your personal deadlines.',
+  ],
   government: [
     'Important dates. Clear next steps.',
     'Published by your administrator. Check the source for official details.',
   ],
-  calendar: ['See the bigger picture.', 'Your personal dates and subscribed deadlines, together.'],
-  reminders: ['A timely little nudge.', 'Delivery history from the configured reminder worker.'],
-  settings: ['Make yourself at home.', 'Your account and reminder preferences.'],
+  calendar: [
+    'See the bigger picture.',
+    'Your personal dates and subscribed deadlines, together.',
+  ],
+  reminders: [
+    'A timely little nudge.',
+    'Delivery history from the configured reminder worker.',
+  ],
+  settings: [
+    'Make yourself at home.',
+    'Your account and reminder preferences.',
+  ],
 };
 let data = null,
-  view = 'overview',
+  view = Object.hasOwn(config, location.hash.slice(1))
+    ? location.hash.slice(1)
+    : 'overview',
   signup = false,
   query = '',
   priority = 'all',
@@ -59,36 +93,51 @@ let data = null,
   editorSubmit = null,
   loadSerial = 0,
   toastTimer;
-document.querySelectorAll('[data-icon]').forEach((n) => (n.innerHTML = icon(n.dataset.icon)));
+document
+  .querySelectorAll('[data-icon]')
+  .forEach((n) => (n.innerHTML = icon(n.dataset.icon)));
 async function api(path, { method = 'GET', value } = {}) {
+  if (isLocal) return localRequest(path, { method, value });
   const headers = { Accept: 'application/json' };
   if (value !== undefined) headers['Content-Type'] = 'application/json';
   const csrf = document.cookie
     .split('; ')
     .find((v) => v.startsWith('csrf_access_token='))
     ?.split('=')[1];
-  if (csrf) headers['X-CSRF-TOKEN'] = decodeURIComponent(csrf);
+  if (!isRemote && csrf) headers['X-CSRF-TOKEN'] = decodeURIComponent(csrf);
+  if (isRemote && remoteToken) headers.Authorization = 'Bearer ' + remoteToken;
   let response;
   try {
-    response = await fetch(path, {
+    response = await fetch((isRemote ? runtime.apiBaseUrl : '') + path, {
       method,
       headers,
-      credentials: 'same-origin',
+      credentials: isRemote ? 'omit' : 'same-origin',
       body: value === undefined ? undefined : JSON.stringify(value),
     });
   } catch {
-    throw new Error('Could not reach AlertMe. Check your connection and try again.');
+    throw new Error(
+      'Could not reach AlertMe. Check your connection and try again.',
+    );
   }
   let result;
   try {
     result = await response.json();
   } catch {
-    throw new Error('The server returned an unreadable response. Please try again.');
+    throw new Error(
+      'The server returned an unreadable response. Please try again.',
+    );
   }
   if (!response.ok) {
-    if (response.status === 401 && data) showAuth('Your session ended. Sign in again to continue.');
+    if (response.status === 401 && data)
+      showAuth('Your session ended. Sign in again to continue.');
     throw new Error(result.message || 'The request could not be completed.');
   }
+  if (
+    isRemote &&
+    result.token &&
+    ['/signup', '/login', '/auth/api/admin/login'].includes(path)
+  )
+    remoteToken = result.token;
   return result;
 }
 function toast(message) {
@@ -102,6 +151,7 @@ function showError(message) {
   $('error-banner').hidden = false;
 }
 function showAuth(message = '') {
+  remoteToken = '';
   loadSerial++;
   if (signup) $('auth-switch').click();
   $('auth-admin').checked = false;
@@ -125,19 +175,35 @@ async function loadWorkspace() {
     const result = await api('/api/workspace');
     if (serial !== loadSerial) return;
     data = result;
+    localBlocked = false;
     $('auth').hidden = true;
     $('workspace').hidden = false;
     $('error-banner').hidden = true;
-    $('sync-label').textContent = 'Up to date';
-    if (data.user.is_admin && ['overview', 'personal', 'reminders'].includes(view))
+    $('sync-label').textContent = isLocal
+      ? 'Saved in this browser'
+      : 'Up to date';
+    if (
+      data.user.is_admin &&
+      ['overview', 'personal', 'reminders'].includes(view)
+    )
       view = 'government';
     render();
   } catch (error) {
     if (serial !== loadSerial) return;
-    if (data) {
-      showError(error.message + ' Your current view is retained. Use Refresh to retry.');
+    if (isLocal && !data) {
+      localBlocked = true;
+      data = emptyWorkspace();
+      $('auth').hidden = true;
+      $('workspace').hidden = false;
+      render();
+      showError(error.message);
+    } else if (data) {
+      showError(
+        error.message + ' Your current view is retained. Use Refresh to retry.',
+      );
       $('sync-label').textContent = 'Refresh needed';
-    } else showAuth(error.message === 'Sign in to continue.' ? '' : error.message);
+    } else
+      showAuth(error.message === 'Sign in to continue.' ? '' : error.message);
   } finally {
     $('refresh').disabled = false;
   }
@@ -145,7 +211,9 @@ async function loadWorkspace() {
 function userEntries() {
   return [
     ...(data?.personal || []),
-    ...(data?.government || []).filter((d) => d.subscribed || data?.user?.is_admin),
+    ...(data?.government || []).filter(
+      (d) => d.subscribed || data?.user?.is_admin,
+    ),
   ];
 }
 function viewEntries() {
@@ -164,7 +232,8 @@ function filtered() {
           .includes(query.toLowerCase()) &&
         (priority === 'all' || d.priority === priority) &&
         (status === 'all' || status === 'overdue'
-          ? status !== 'overdue' || (daysLeft(d) < 0 && d.status !== 'completed')
+          ? status !== 'overdue' ||
+            (daysLeft(d) < 0 && d.status !== 'completed')
           : d.status === status),
     )
     .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
@@ -176,7 +245,9 @@ function panelHeader(title, subtitle = '', link = '', target = '') {
   return `<div class="panel-header"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div>${link ? `<a class="button quiet" href="#${target}">${link} ${icon('arrow')}</a>` : ''}</div>`;
 }
 function priorityBadge(item) {
-  const value = ['high', 'medium', 'low'].includes(item.priority) ? item.priority : 'medium';
+  const value = ['high', 'medium', 'low'].includes(item.priority)
+    ? item.priority
+    : 'medium';
   return `<span class="badge ${value}">${titleCase(value)}</span>`;
 }
 function deadlineRow(item) {
@@ -200,7 +271,12 @@ function statistics() {
       'Your next seven days',
       'clock',
     ],
-    ['Overdue', active.filter((d) => daysLeft(d) < 0).length, 'Worth a little attention', 'flag'],
+    [
+      'Overdue',
+      active.filter((d) => daysLeft(d) < 0).length,
+      'Worth a little attention',
+      'flag',
+    ],
     [
       'Completed',
       rows.filter((d) => d.status === 'completed').length,
@@ -237,21 +313,23 @@ function overview() {
       .sort((a, b) => a.due_date.localeCompare(b.due_date)),
     soon = pending.filter((d) => daysLeft(d) >= 0).slice(0, 3),
     completed = data.personal.filter((d) => d.status === 'completed').length;
-  return `${statistics()}<div class="dashboard-grid"><section class="panel">${panelHeader('A little focus for today', 'The important things, without the overwhelm.', 'View all', 'personal')}${pending.length ? `<div class="list">${pending.slice(0, 5).map(deadlineRow).join('')}</div>` : empty('A fresh start for your plans.', 'Add your first personal deadline, or follow a published deadline.', 'Add a deadline')}${data.personal.length ? `<div class="progress-panel"><div><strong>${completed} of ${data.personal.length}</strong><p>personal deadlines completed</p></div><progress value="${completed}" max="${data.personal.length}" aria-label="Completed deadlines"></progress></div>` : ''}</section><div>${calendarWidget()}<div class="breathing-room"><span aria-hidden="true">✧</span><h3>One small step is still a step.</h3><p>A little planning today gives tomorrow a little more breathing room.</p></div></div></div><div class="dashboard-grid"><section class="panel">${panelHeader('Coming up next', 'Keep these dates in the corner of your eye.', 'Open calendar', 'calendar')}${soon.length ? soon.map((d) => `<div class="upnext-card">${dateTile(d)}<div><h3>${esc(d.title)}</h3><p>${statusText(d)} · ${esc(d.department || d.category || 'Personal')}</p></div></div>`).join('') : empty('A little breathing room.', 'No upcoming dates on your list.', '', '')}</section><section class="panel">${panelHeader('Published deadlines', 'Useful dates to keep on your radar.', 'Explore', 'government')}${
-    data.government.length
-      ? data.government
-          .slice(0, 2)
-          .map(
-            (d) =>
-              `<div class="upnext-card">${dateTile(d)}<div><h3>${esc(d.title)}</h3><p>${esc(d.department || 'Published deadline')} · ${displayDate(d.due_date)}</p></div></div>`,
+  return `${statistics()}<div class="dashboard-grid"><section class="panel">${panelHeader('A little focus for today', 'The important things, without the overwhelm.', 'View all', 'personal')}${pending.length ? `<div class="list">${pending.slice(0, 5).map(deadlineRow).join('')}</div>` : empty('A fresh start for your plans.', isLocal ? 'Add your first personal deadline.' : 'Add your first personal deadline, or follow a published deadline.', 'Add a deadline')}${data.personal.length ? `<div class="progress-panel"><div><strong>${completed} of ${data.personal.length}</strong><p>personal deadlines completed</p></div><progress value="${completed}" max="${data.personal.length}" aria-label="Completed deadlines"></progress></div>` : ''}</section><div>${calendarWidget()}<div class="breathing-room"><span aria-hidden="true">✧</span><h3>One small step is still a step.</h3><p>A little planning today gives tomorrow a little more breathing room.</p></div></div></div><div class="dashboard-grid"><section class="panel">${panelHeader('Coming up next', 'Keep these dates in the corner of your eye.', 'Open calendar', 'calendar')}${soon.length ? soon.map((d) => `<div class="upnext-card">${dateTile(d)}<div><h3>${esc(d.title)}</h3><p>${statusText(d)} · ${esc(d.department || d.category || 'Personal')}</p></div></div>`).join('') : empty('A little breathing room.', 'No upcoming dates on your list.', '', '')}</section><section class="panel">${panelHeader(isLocal ? 'Keep your plans with you' : 'Published deadlines', isLocal ? 'A small habit for peace of mind.' : 'Useful dates to keep on your radar.', isLocal ? 'Open Settings' : 'Explore', isLocal ? 'settings' : 'government')}${
+    isLocal
+      ? `<p class="muted">Your planner is saved in this browser. Download a backup from Settings to keep a copy or move your dates to another device.</p>`
+      : data.government.length
+        ? data.government
+            .slice(0, 2)
+            .map(
+              (d) =>
+                `<div class="upnext-card">${dateTile(d)}<div><h3>${esc(d.title)}</h3><p>${esc(d.department || 'Published deadline')} · ${displayDate(d.due_date)}</p></div></div>`,
+            )
+            .join('')
+        : empty(
+            'Nothing published yet.',
+            'Deadlines shared by your administrator will appear here.',
+            '',
+            '',
           )
-          .join('')
-      : empty(
-          'Nothing published yet.',
-          'Deadlines shared by your administrator will appear here.',
-          '',
-          '',
-        )
   }</section></div>`;
 }
 function filters() {
@@ -278,6 +356,8 @@ function personal() {
   }<div class="pagination"><button class="button" data-action="previous" ${page === 1 ? 'disabled' : ''}>← Previous</button><span>Page ${page} of ${pages}</span><button class="button" data-action="next" ${page === pages ? 'disabled' : ''}>Next →</button></div></section>`;
 }
 function government() {
+  if (isLocal)
+    return `<section class="panel">${panelHeader('A connected feature', 'Published deadlines belong to the shared AlertMe service.')}<p class="muted">This GitHub Pages edition keeps personal deadlines in your browser. Administrator publishing and subscriptions require a hosted AlertMe API.</p><a class="button" href="https://github.com/taksh1507/AlertMe-Government-Deadline-Assistant#run-desktop-and-web-locally" target="_blank" rel="noopener noreferrer">Connected workspace setup ${icon('arrow')}</a></section>`;
   const rows = filtered(),
     admin = data.user.is_admin;
   return `${filters()}<p class="feed-note">These deadlines are published by your administrator. Source links help you confirm requirements and any changes. A subscription adds a deadline to your calendar and configured reminders.</p><div class="feed-grid">${rows.length ? rows.map((d) => `<article class="panel feed-card"><div class="feed-heading"><span class="department-icon">${icon('building')}</span><span>${esc(d.department)}</span>${priorityBadge(d)}</div><h3>${esc(d.title)}</h3><p>${esc(d.description || 'Open the source for application details.')}</p><div class="meta"><span>${icon('calendar')}</span><span>${displayDate(d.due_date)}</span><span>· ${statusText(d)}</span></div><div class="feed-actions">${admin ? `<button class="button primary" data-action="edit-government" data-id="${esc(d.id)}">Edit deadline</button><button class="button danger" data-action="delete-government" data-id="${esc(d.id)}">Delete</button><span class="small muted">${d.subscriber_count || 0} following</span>` : `<button class="button ${d.subscribed ? '' : 'primary'}" data-action="subscribe" data-id="${esc(d.id)}">${d.subscribed ? 'Following ✓' : 'Follow deadline'}</button>`}${d.source_url && /^https:\/\//i.test(d.source_url) ? `<a class="button quiet" href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">Open source ${icon('arrow')}</a>` : ''}</div></article>`).join('') : `<section class="panel">${empty('Nothing published yet.', 'Deadlines shared by your administrator will appear here.', admin ? 'Publish a deadline' : '', admin ? 'new' : '')}</section>`}</div>`;
@@ -287,9 +367,33 @@ function calendarView() {
   return `<div class="calendar-layout">${calendarWidget(true)}<section class="panel">${panelHeader(displayDate(selectedDate), 'Your plans for this day.')}<div class="list">${entries.length ? entries.map(deadlineRow).join('') : empty('A little breathing room.', 'Nothing scheduled for this day.', '', '')}</div></section></div>`;
 }
 function reminders() {
+  if (isLocal) {
+    const due = data.personal.filter(
+      (d) =>
+        d.status !== 'completed' &&
+        (daysLeft(d) < 0 || d.reminder_days.includes(daysLeft(d))),
+    );
+    return `<div class="notice">Browser-local reminders are shown here while you use this planner. This edition does not send email, SMS or background notifications.</div><section class="panel">${panelHeader('On your radar today', 'Based on your deadline dates and reminder-day choices.')}${
+      due.length
+        ? due
+            .sort((a, b) => a.due_date.localeCompare(b.due_date))
+            .map(deadlineRow)
+            .join('')
+        : empty(
+            'A little breathing room.',
+            'No reminders are due on your list today.',
+            'View your deadlines',
+            'personal',
+          )
+    }</section>`;
+  }
   return `<div class="notice">Reminders are sent only to verified contacts with an enabled preference. A separate reminder worker must be running. This history shows actual attempts; following a deadline never submits an application or makes a payment.</div><section class="panel">${panelHeader('Delivery history', 'Your latest 100 reminder attempts.')}${data.notifications.length ? data.notifications.map((d) => `<article class="delivery-row"><div><strong>${esc(d.title)}</strong><small>Due ${displayDate(d.due_date)} · ${esc(d.channel)}</small></div><span class="badge ${d.status === 'sent' ? 'low' : d.status === 'failed' ? 'high' : 'medium'}">${esc(titleCase(d.status))}</span><span class="small muted">${esc(String(d.created_at || '').slice(0, 10))}</span></article>`).join('') : empty('No delivery attempts yet.', 'Enable a verified channel in Settings and start the reminder worker.', 'Open settings', 'settings')}</section>`;
 }
+function localSettings() {
+  return `<div class="settings-grid"><section class="panel">${panelHeader('Your browser workspace', 'No account or password is needed.')}<form id="profile-form"><label>Display name<input name="name" value="${esc(data.user.name)}" maxlength="80" required></label><button class="button primary" type="submit" ${localBlocked ? 'disabled' : ''}>Save name</button></form><p>Records stay in this browser profile on this site. They are not synchronized with the native app or another device.</p></section><section class="panel">${panelHeader('Keep a copy of your dates', 'Take your planner with you.')}<p>Download a complete JSON backup. Restoring a backup replaces the current local planner only after confirmation.</p><div class="feed-actions"><button class="button primary" data-action="backup-local">Download backup</button><button class="button" data-action="import-local">Restore backup</button></div></section><section class="panel">${panelHeader('Desktop and shared accounts', 'Two editions, with clear boundaries.')}<p>The full AlertMe service connects desktop and web accounts, government publications, subscriptions and verified email/SMS reminders. It needs a separately hosted shared AlertMe service.</p><a class="button" href="https://github.com/taksh1507/AlertMe-Government-Deadline-Assistant#run-desktop-and-web-locally" target="_blank" rel="noopener noreferrer">View setup instructions ${icon('arrow')}</a></section><section class="panel">${panelHeader('Make room for a fresh start')}<p>Clearing browser data removes local records. Keep a backup somewhere you control.</p><button class="button danger" data-action="reset-local">Reset local planner</button></section></div>`;
+}
 function settings() {
+  if (isLocal) return localSettings();
   const u = data.user;
   if (u.is_admin)
     return `<section class="panel">${panelHeader('Administrator workspace', 'Publish useful dates from Government and keep source links up to date.')}<p class="muted">${esc(u.email)}</p><p class="muted">Both native desktop and web use this same publishing account. Your changes appear on the next workspace refresh.</p></section>`;
@@ -299,28 +403,43 @@ function renderAccount() {
   if (!data) return;
   const admin = data.user.is_admin;
   $('account-name').textContent = data.user.name;
-  $('account-role').textContent = admin ? 'Administrator' : 'Personal account';
-  $('avatar').textContent = $('top-avatar').textContent = (data.user.name || 'Y')
+  $('account-role').textContent = isLocal
+    ? 'Browser-local planner'
+    : admin
+      ? 'Administrator'
+      : 'Personal account';
+  $('avatar').textContent = $('top-avatar').textContent = (
+    data.user.name || 'Y'
+  )
     .slice(0, 1)
     .toUpperCase();
 }
 function render() {
   if (!data) return;
   const admin = data.user.is_admin;
-  if (admin && ['overview', 'personal', 'reminders'].includes(view)) view = 'government';
+  if (admin && ['overview', 'personal', 'reminders'].includes(view))
+    view = 'government';
   document.querySelectorAll('[data-view]').forEach((a) => {
-    a.hidden = admin && ['overview', 'personal', 'reminders'].includes(a.dataset.view);
+    a.hidden =
+      (isLocal && a.dataset.view === 'government') ||
+      (admin && ['overview', 'personal', 'reminders'].includes(a.dataset.view));
     a.classList.toggle('active', a.dataset.view === view);
     if (a.dataset.view === view) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
   renderAccount();
-  $('crumb').textContent = view === 'personal' ? 'My deadlines' : titleCase(view);
+  $('crumb').textContent =
+    view === 'personal' ? 'My deadlines' : titleCase(view);
   $('page-title').textContent = config[view][0];
   $('page-subtitle').textContent = config[view][1];
   $('new-deadline').hidden =
-    ['settings', 'reminders'].includes(view) || (admin && view !== 'government');
-  $('new-deadline').innerHTML = icon('plus') + (admin ? 'Publish deadline' : 'New deadline');
+    ['settings', 'reminders'].includes(view) ||
+    (admin && view !== 'government');
+  $('new-deadline').disabled = localBlocked;
+  $('sign-out').hidden = isLocal;
+  $('local-mode-note').hidden = !isLocal;
+  $('new-deadline').innerHTML =
+    icon('plus') + (admin ? 'Publish deadline' : 'New deadline');
   $('view').innerHTML =
     view === 'overview'
       ? overview()
@@ -342,7 +461,14 @@ const options = (values, current) =>
         `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${titleCase(v)}</option>`,
     )
     .join('');
-const field = (name, label, value = '', type = 'text', extra = '', wide = false) =>
+const field = (
+  name,
+  label,
+  value = '',
+  type = 'text',
+  extra = '',
+  wide = false,
+) =>
   `<label class="${wide ? 'wide' : ''}">${label}<input type="${type}" name="${name}" value="${esc(value)}" ${extra}></label>`;
 function openEditor(title, fields, callback, save = 'Save deadline') {
   $('editor-title').textContent = title;
@@ -362,7 +488,14 @@ function editDeadline(item = null, government = data.user.is_admin) {
     reminder_days: [7, 3, 1, 0],
   };
   const fields =
-    field('title', 'Title', d.title || '', 'text', 'required maxlength="120"', true) +
+    field(
+      'title',
+      'Title',
+      d.title || '',
+      'text',
+      'required maxlength="120"',
+      true,
+    ) +
     field(
       'due_date',
       'Due date',
@@ -409,11 +542,14 @@ function editDeadline(item = null, government = data.user.is_admin) {
           .map((v) => v.trim())
           .filter(Boolean);
         if (values.some((v) => !/^\d+$/.test(v)))
-          throw new Error('Use comma-separated whole numbers for reminder days.');
+          throw new Error(
+            'Use comma-separated whole numbers for reminder days.',
+          );
         f.reminder_days = values.map(Number);
       }
       const path = government
-        ? '/admin/api/government-deadlines' + (item ? '/' + encodeURIComponent(item.id) : '')
+        ? '/admin/api/government-deadlines' +
+          (item ? '/' + encodeURIComponent(item.id) : '')
         : item
           ? pathFor(item)
           : '/api/personal-deadlines';
@@ -452,7 +588,9 @@ function exportCSV() {
     [
       'Title,Due date,Priority,Status,Category,Type',
       ...rows.map((d) =>
-        [d.title, d.due_date, d.priority, d.status, d.category, d.storage].map(cell).join(','),
+        [d.title, d.due_date, d.priority, d.status, d.category, d.storage]
+          .map(cell)
+          .join(','),
       ),
     ].join('\r\n'),
     'text/csv;charset=utf-8',
@@ -506,10 +644,35 @@ function exportCalendar() {
     }
     folded.push(value);
   }
-  download(folded.join('\r\n') + '\r\n', 'text/calendar;charset=utf-8', `alertme-${today()}.ics`);
+  download(
+    folded.join('\r\n') + '\r\n',
+    'text/calendar;charset=utf-8',
+    `alertme-${today()}.ics`,
+  );
   toast('Calendar file exported.');
 }
 const actions = {
+  personal: () => (location.hash = 'personal'),
+  'backup-local': () => {
+    download(
+      localBackup(),
+      'application/json',
+      `alertme-backup-${today()}.json`,
+    );
+    toast('Planner backup downloaded.');
+  },
+  'import-local': () => $('local-import').click(),
+  'reset-local': async () => {
+    if (
+      confirm(
+        'Delete every deadline in this browser planner? Download a backup first. This cannot be undone.',
+      )
+    ) {
+      restoreLocal(JSON.stringify(emptyWorkspace()));
+      await loadWorkspace();
+      toast('Local planner reset.');
+    }
+  },
   new: () => editDeadline(),
   edit: (id, storage) => editDeadline(findEntry(id, storage), false),
   'edit-government': (id) => editDeadline(findEntry(id, 'government'), true),
@@ -531,19 +694,28 @@ const actions = {
   },
   'delete-government': async (id) => {
     if (confirm('Delete this published deadline? This cannot be undone.')) {
-      await api('/admin/api/government-deadlines/' + encodeURIComponent(id), { method: 'DELETE' });
+      await api('/admin/api/government-deadlines/' + encodeURIComponent(id), {
+        method: 'DELETE',
+      });
       await loadWorkspace();
       toast('Published deadline deleted.');
     }
   },
   subscribe: async (id) => {
     const d = findEntry(id, 'government');
-    await api('/api/government-deadlines/' + encodeURIComponent(id) + '/subscribe', {
-      method: 'POST',
-      value: { subscribed: !d.subscribed },
-    });
+    await api(
+      '/api/government-deadlines/' + encodeURIComponent(id) + '/subscribe',
+      {
+        method: 'POST',
+        value: { subscribed: !d.subscribed },
+      },
+    );
     await loadWorkspace();
-    toast(d.subscribed ? 'Unfollowed deadline.' : 'Deadline added to your calendar.');
+    toast(
+      d.subscribed
+        ? 'Unfollowed deadline.'
+        : 'Deadline added to your calendar.',
+    );
   },
   'prev-month': () => changeMonth(-1),
   'next-month': () => changeMonth(1),
@@ -583,7 +755,10 @@ const actions = {
         true,
       ),
       async (f) => {
-        await api('/api/me/verification', { method: 'PUT', value: { channel, code: f.code } });
+        await api('/api/me/verification', {
+          method: 'PUT',
+          value: { channel, code: f.code },
+        });
         await loadWorkspace();
       },
       'Verify contact',
@@ -600,18 +775,27 @@ function changeMonth(step) {
 $('auth-switch').addEventListener('click', () => {
   loadSerial++;
   signup = !signup;
-  $('name-label').hidden = $('phone-label').hidden = $('password-hint').hidden = !signup;
+  $('name-label').hidden =
+    $('phone-label').hidden =
+    $('password-hint').hidden =
+      !signup;
   $('auth-name').required = signup;
   $('admin-label').hidden = signup;
   $('auth-admin').checked = false;
-  $('auth-title').textContent = signup ? 'Make room for what matters.' : 'Good to see you.';
+  $('auth-title').textContent = signup
+    ? 'Make room for what matters.'
+    : 'Good to see you.';
   $('auth-subtitle').textContent = signup
     ? 'Create your connected deadline workspace.'
     : 'Sign in to pick up where you left off.';
   $('auth-submit').textContent = signup ? 'Create account' : 'Sign in';
-  $('switch-label').textContent = signup ? 'Already have an account?' : 'New here?';
+  $('switch-label').textContent = signup
+    ? 'Already have an account?'
+    : 'New here?';
   $('auth-switch').textContent = signup ? 'Sign in' : 'Create an account';
-  $('auth-password').autocomplete = signup ? 'new-password' : 'current-password';
+  $('auth-password').autocomplete = signup
+    ? 'new-password'
+    : 'current-password';
   $('auth-error').textContent = '';
 });
 $('auth-form').addEventListener('submit', async (e) => {
@@ -622,15 +806,26 @@ $('auth-form').addEventListener('submit', async (e) => {
   try {
     const identifier = $('auth-identifier').value.trim(),
       password = $('auth-password').value;
-    const path = signup ? '/signup' : $('auth-admin').checked ? '/auth/api/admin/login' : '/login';
+    const path = signup
+      ? '/signup'
+      : $('auth-admin').checked
+        ? '/auth/api/admin/login'
+        : '/login';
     const value = signup
-      ? { name: $('auth-name').value, email: identifier, phone: $('auth-phone').value, password }
+      ? {
+          name: $('auth-name').value,
+          email: identifier,
+          phone: $('auth-phone').value,
+          password,
+        }
       : $('auth-admin').checked
         ? { email: identifier, password }
         : { identifier, password };
     await api(path, { method: 'POST', value });
     $('auth-password').value = '';
-    view = Object.hasOwn(config, location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
+    view = Object.hasOwn(config, location.hash.slice(1))
+      ? location.hash.slice(1)
+      : 'overview';
     await loadWorkspace();
   } catch (error) {
     $('auth-error').textContent = error.message;
@@ -670,7 +865,10 @@ $('view').addEventListener('click', async (e) => {
   if (!button || button.disabled) return;
   button.disabled = true;
   try {
-    await actions[button.dataset.action]?.(button.dataset.id, button.dataset.storage);
+    await actions[button.dataset.action]?.(
+      button.dataset.id,
+      button.dataset.storage,
+    );
   } catch (error) {
     showError(error.message);
   } finally {
@@ -719,7 +917,10 @@ $('view').addEventListener('submit', async (e) => {
       data.user.preferences = result.preferences;
       toast('Reminder preferences saved.');
     } else if (e.target.id === 'profile-form') {
-      const result = await api('/api/me', { method: 'PUT', value: { name: form.name } });
+      const result = await api('/api/me', {
+        method: 'PUT',
+        value: { name: form.name },
+      });
       if (!data || data.user.id !== owner) return;
       data.user.name = result.name;
       e.target.elements.name.value = result.name;
@@ -747,7 +948,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && closeMenu()) $('menu-toggle').focus();
 });
 document.addEventListener('click', (e) => {
-  if (!$('sidebar').contains(e.target) && !$('menu-toggle').contains(e.target)) closeMenu();
+  if (!$('sidebar').contains(e.target) && !$('menu-toggle').contains(e.target))
+    closeMenu();
 });
 window.addEventListener('hashchange', () => {
   const target = location.hash.slice(1);
@@ -759,10 +961,56 @@ window.addEventListener('hashchange', () => {
   render();
   if (data) $('main').focus({ preventScroll: true });
 });
+$('local-import').addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file || !isLocal) return;
+  try {
+    if (file.size > 10 * 1024 * 1024)
+      throw new Error('Choose a backup smaller than 10 MB.');
+    const raw = await file.text();
+    let backup;
+    try {
+      backup = validateWorkspace(JSON.parse(raw));
+    } catch {
+      throw new Error(
+        'This is not a valid AlertMe browser backup. Your saved records have not changed.',
+      );
+    }
+    openEditor(
+      'Restore your planner',
+      `<p class="muted wide">This backup has ${backup.personal.length} deadlines. Restoring replaces your current local planner. Download a backup first, then type RESTORE to confirm.</p>` +
+        field(
+          'confirmation',
+          'Confirmation',
+          '',
+          'text',
+          'required pattern="RESTORE"',
+          true,
+        ),
+      async (values) => {
+        if (values.confirmation !== 'RESTORE')
+          throw new Error('Type RESTORE to continue.');
+        restoreLocal(raw);
+        await loadWorkspace();
+      },
+      'Restore backup',
+    );
+  } catch (error) {
+    showError(error.message);
+  }
+});
+window.addEventListener('storage', (event) => {
+  if (isLocal && (event.key === localStorageKey || event.key === null)) {
+    $('editor').close();
+    loadWorkspace();
+  }
+});
 window.addEventListener('focus', () => {
   if (data && view !== 'settings' && !$('editor').open) loadWorkspace();
 });
 setInterval(() => {
-  if (data && !document.hidden && !$('editor').open && view !== 'settings') loadWorkspace();
+  if (data && !document.hidden && !$('editor').open && view !== 'settings')
+    loadWorkspace();
 }, 60000);
 loadWorkspace();

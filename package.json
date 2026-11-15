@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check:web": "node --check Alertme/src/web/static/app.js && node --check Alertme/src/web/static/icons.js",
-    "test:web": "playwright test"
+    "check:web": "node --check Alertme/src/web/static/app.js && node --check Alertme/src/web/static/icons.js && node --check Alertme/src/web/static/local-workspace.js && node --check scripts/build-pages.mjs",
+    "test:web": "playwright test",
+    "build:pages": "node scripts/build-pages.mjs",
+    "test:pages": "playwright test --config playwright.pages.config.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

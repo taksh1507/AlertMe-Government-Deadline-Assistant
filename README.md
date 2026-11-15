@@ -76,8 +76,19 @@ No email/SMS account is needed to manage personal deadlines. Delivery features
 require the optional provider configuration described below.
 
 For an API/web-only host, install `Alertme/requirements-api.txt` instead of the
-full desktop requirements. The website requires this running API; it is not a
-standalone GitHub Pages site. Public hosting is not provisioned by this repository.
+full desktop requirements. This connected edition requires the running API.
+
+## GitHub Pages planner
+
+Open [AlertMe online](https://taksh1507.github.io/AlertMe-Government-Deadline-Assistant/).
+The Pages edition works without an account: manage personal deadlines, view your
+calendar, export CSV/calendar files, and download or restore JSON backups.
+Records stay in this browser profile; clearing site data removes them. Keep a
+backup to move dates between devices.
+
+GitHub Pages cannot run the API or database. Shared accounts, administrator
+publications, subscriptions and email/SMS delivery belong to the connected
+edition above. See [deployment instructions](DEPLOYMENT.md) for both editions.
 
 ## Publish and follow deadlines
 
@@ -132,15 +143,15 @@ flowchart LR
     API --> Contacts[Contact verification]
 ```
 
-| Location | Responsibility |
-| --- | --- |
-| `Alertme/src/frontend/desktop.py` | Native windows, dialogs, calendar, tables and account flows |
-| `Alertme/src/frontend/api_client.py` | Qt event-loop networking with bounded requests |
-| `Alertme/src/web/` | Same-origin responsive website and local assets |
-| `Alertme/src/backend/app.py` | Configured application factory and shared API routes |
-| `Alertme/src/backend/models/` | Shared validation and retained deadline collections |
-| `Alertme/src/backend/services/` | Delivery adapters and reminder worker |
-| `Alertme/src/shared/exporting.py` | Native CSV and calendar-file formatting |
+| Location                             | Responsibility                                              |
+| ------------------------------------ | ----------------------------------------------------------- |
+| `Alertme/src/frontend/desktop.py`    | Native windows, dialogs, calendar, tables and account flows |
+| `Alertme/src/frontend/api_client.py` | Qt event-loop networking with bounded requests              |
+| `Alertme/src/web/`                   | Same-origin responsive website and local assets             |
+| `Alertme/src/backend/app.py`         | Configured application factory and shared API routes        |
+| `Alertme/src/backend/models/`        | Shared validation and retained deadline collections         |
+| `Alertme/src/backend/services/`      | Delivery adapters and reminder worker                       |
+| `Alertme/src/shared/exporting.py`    | Native CSV and calendar-file formatting                     |
 
 Existing personal records in both configured deadline databases remain visible;
 the application does not discard one store when opening the other. Back up an
