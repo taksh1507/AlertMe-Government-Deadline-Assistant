@@ -1,7 +1,35 @@
 # Running a shared AlertMe installation
 
-The API hosts the website and serves native clients. Deployment is manual; CI
-checks the code and does not publish a website or provision a database.
+The connected API hosts the website and serves native clients. Its deployment
+is manual. A separate workflow publishes the browser-local edition to GitHub Pages.
+
+## GitHub Pages
+
+The `GitHub Pages website` workflow tests and publishes `_site/` after pushes to
+`main`. Repository Settings → Pages must use **GitHub Actions** as the source.
+The public URL is https://taksh1507.github.io/AlertMe-Government-Deadline-Assistant/.
+Only static web assets are included. No API, database or reminder worker runs on Pages.
+
+Build and preview locally with Node.js 22+:
+
+```bash
+npm ci
+npm run build:pages
+node scripts/serve-pages.mjs
+```
+
+Open http://127.0.0.1:58763/AlertMe-Government-Deadline-Assistant/.
+The default planner stores dates in localStorage for this browser and origin.
+Use Settings to download a JSON backup before clearing browser data or changing
+devices. Restore validates the complete file and asks before replacing records.
+This edition has no sign-in, cross-device synchronization or background email/SMS delivery.
+
+For an independently hosted connected API, set the public repository Actions
+variable `ALERTME_API_URL` to its HTTPS root and rerun the workflow. Configure
+the API `CORS_ORIGINS` to include `https://taksh1507.github.io`. This public URL
+is configuration, not a credential. The connected browser uses an in-memory
+access token; sign in again after reloading. Browser-local records are not
+automatically migrated to an account. Leave this variable unset for local mode.
 
 ## API and website
 

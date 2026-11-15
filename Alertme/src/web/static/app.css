@@ -4,7 +4,7 @@
     ui-sans-serif,
     -apple-system,
     BlinkMacSystemFont,
-    'Segoe UI',
+    "Segoe UI",
     sans-serif;
   color: #39344c;
   background: #f7f7fb;
@@ -247,7 +247,7 @@ h3 {
   min-height: 690px;
 }
 .auth-hero:after {
-  content: '';
+  content: "";
   position: absolute;
   width: 380px;
   height: 380px;
@@ -668,7 +668,7 @@ main:focus {
   place-items: center;
   flex-shrink: 0;
 }
-.deadline-check[aria-pressed='true'] {
+.deadline-check[aria-pressed="true"] {
   background: #a798cc;
   border-color: #a798cc;
   color: white;
@@ -904,7 +904,7 @@ progress::-webkit-progress-value {
   font-weight: 700;
 }
 .month-days button.has-date:after {
-  content: '';
+  content: "";
   height: 3px;
   width: 3px;
   border-radius: 50%;
@@ -1436,7 +1436,7 @@ body:has(dialog[open]) {
     min-height: 90dvh;
   }
   .auth-panel:before {
-    content: 'AlertMe.';
+    content: "AlertMe.";
     display: block;
     font-size: 25px;
     font-weight: 750;
@@ -1754,4 +1754,14 @@ footer b,
 .auth-foot,
 .auth-note p {
   color: var(--muted);
+}
+
+html[data-workspace-mode="local"] #auth {
+  display: none;
+}
+body:has(#auth:not([hidden])) .skip {
+  display: none;
+}
+html[data-workspace-mode="local"] .skip {
+  display: block;
 }

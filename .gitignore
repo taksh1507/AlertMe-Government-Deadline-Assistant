@@ -183,3 +183,8 @@ playwright-report/
 .env.*
 !.env.example
 !Alertme/.env.example
+
+# Generated GitHub Pages artifact
+_site/
+
+_pages-preview/
